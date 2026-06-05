@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: iris-classifier
+  namespace: ml-serving
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: iris-classifier
+  template:
+    metadata:
+      labels:
+        app: iris-classifier
+    spec:
+      containers:
+        - name: iris-classifier
+          image: ${ECR_URI}:latest
+          ports:
+            - containerPort: 8080
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 6
