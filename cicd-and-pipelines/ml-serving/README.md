@@ -1,102 +1,111 @@
-# ML Model Serving on EKS
+# ML Serving on EKS
 
-Deploy and operate realtime ML inference workloads on EKS — from a simple FastAPI server to production-grade model serving with canary rollouts, GPU autoscaling, and model versioning.
+## The Problem
 
----
+Running a trained model as a prediction API sounds simple — wrap it in Flask, push it to a server, done. That works on a laptop. In production it breaks in ways that are hard to predict and expensive to debug:
 
-## What You'll Build
+- **Cold start kills availability.** A model that takes 30 seconds to load will fail every health check during that window. Kubernetes will restart it. It will fail again. CrashLoopBackOff before a single request is served.
+- **Memory is not negotiable.** A 2GB model on a node with 1.8GB available means OOMKilled at 2am, with no signal beyond "container exited with code 137."
+- **You can't update a model without downtime** unless the cluster knows to wait for the new version to be ready before cutting traffic. Default rolling updates don't know about model loading time.
+- **Autoscaling on CPU doesn't fit inference.** A GPU inference server can be idle at 5% CPU while handling 1000 req/s. CPU-based HPA will never scale it. You need request-rate or queue-depth metrics.
+- **You can't safely roll back a bad model** unless the old version is still running somewhere and traffic can shift back in seconds.
 
-| Phase | What | Concepts |
-|-------|------|----------|
-| **Phase 1** | FastAPI inference server — containerized, deployed to EKS | Basic Deployment + Service, health probes for ML |
-| **Phase 2** | KServe InferenceService — ONNX/TorchServe model | CRD-based serving, model storage (S3), protocol (REST/gRPC) |
-| **Phase 3** | Canary model rollout — shift traffic from v1 to v2 | KServe canary split, traffic weights, rollback |
-| **Phase 4** | GPU autoscaling with Karpenter | GPU NodePool, DCGM Exporter, KEDA for request-based scale |
-| **Phase 5** | Model monitoring — data drift, latency SLOs | Prometheus model metrics, alert on prediction distribution shift |
+These failures compound. A model migration that looks fine in staging silently degrades in production because staging didn't have the same memory pressure, didn't test cold start under load, and didn't define what "bad" looks like before declaring success.
 
 ---
 
-## Phase 1: FastAPI Inference Server
+## The Solution
+
+EKS gives you the primitives to solve all of this — but only if you wire them correctly from the start. This tutorial series builds the full ML serving stack, one layer at a time:
 
 ```
-POST /predict  →  FastAPI pod  →  model loaded from S3 at startup
-                      │
-                   livenessProbe:  /health
-                   readinessProbe: /ready  ← confirms model loaded
+                    ┌─────────────────────────────────────────┐
+                    │              Developer                  │
+                    │  trains model → pushes image to ECR    │
+                    └────────────────┬────────────────────────┘
+                                     │
+                    ┌────────────────▼────────────────────────┐
+                    │           EKS Cluster                   │
+                    │                                         │
+                    │  Deployment                             │
+                    │  ├─ livenessProbe:  /health             │
+                    │  │    └─ restarts crashed process       │
+                    │  ├─ readinessProbe: /ready              │
+                    │  │    └─ gates traffic until model loads│
+                    │  ├─ resources.requests                  │
+                    │  │    └─ scheduler finds right node     │
+                    │  └─ HPA / KEDA                          │
+                    │       └─ scales on request rate or lag  │
+                    │                                         │
+                    │  Service (ClusterIP)                    │
+                    │  └─ internal load balancing             │
+                    │                                         │
+                    │  Ingress (ALB) ← Phase 4+               │
+                    │  └─ external traffic, path routing      │
+                    └────────────────┬────────────────────────┘
+                                     │
+                    ┌────────────────▼────────────────────────┐
+                    │           Downstream Consumers          │
+                    │  POST /predict → { class, confidence }  │
+                    └─────────────────────────────────────────┘
 ```
 
-Key differences from a regular web app:
-- **Readiness probe must wait for model load** — models can be 100MB–10GB
-- **Memory requests must match model size** — OOMKill is an inference killer
-- **Graceful shutdown needs drain time** — in-flight requests during pod preemption
+**The three-probe contract** is the foundation of safe ML serving on Kubernetes:
+
+| Probe | Endpoint | What it checks | Kubernetes action on failure |
+|-------|----------|----------------|------------------------------|
+| Liveness | `/health` | Is the process alive? | Restart the container |
+| Readiness | `/ready` | Is the model loaded? | Stop sending traffic to this pod |
+| Startup | `/ready` (high threshold) | Did model finish loading? | Give it time before failing |
+
+Traffic never reaches a pod until readiness passes. That means model loading time is handled — not worked around.
 
 ---
 
-## Phase 2: KServe
+## Phase Progression
 
-KServe abstracts the serving runtime — point it at an S3 model artifact, get a fully managed inference endpoint.
+Each phase solves the next failure mode you'd hit in production:
 
-```yaml
-apiVersion: serving.kserve.io/v1beta1
-kind: InferenceService
-metadata:
-  name: fraud-detector
-  namespace: ml-serving
-spec:
-  predictor:
-    sklearn:
-      storageUri: s3://my-models/fraud-detector/v1
-      resources:
-        requests:
-          memory: 2Gi
-```
-
-KServe handles: model download, runtime selection, scale-to-zero, canary splits.
+| Phase | What | Problem it solves |
+|-------|------|-------------------|
+| **Phase 1** | FastAPI inference server | Cold start, memory sizing, readiness gate |
+| **Phase 2** | KServe InferenceService | Model storage (S3), serving runtime abstraction, scale-to-zero |
+| **Phase 3** | Canary model rollout | Safe model updates — traffic split, progressive shift, instant rollback |
+| **Phase 4** | GPU autoscaling with Karpenter | GPU node provisioning on demand, request-rate based scaling |
+| **Phase 5** | Model monitoring | Latency SLOs, data drift detection, alert rules, model health dashboard |
 
 ---
 
-## Folder Structure
+## Cluster Strategy
 
-```
-ml-serving/
-├── README.md                          ← you are here
-├── phase1-fastapi/
-│   ├── app/                           ← FastAPI app with /predict, /health, /ready
-│   ├── Dockerfile
-│   └── k8s/deployment.yaml
-├── phase2-kserve/
-│   ├── install/                       ← KServe + cert-manager install
-│   ├── inference-service.yaml
-│   └── test-predict.sh
-├── phase3-canary-rollout/
-│   ├── inference-service-v2.yaml      ← canaryTrafficPercent: 20
-│   └── promote.sh                    ← shift traffic 20 → 50 → 100
-├── phase4-gpu-autoscaling/
-│   ├── karpenter-gpu-nodepool.yaml    ← references ../tutorials/cluster-karpenter/nodepool-gpu.yaml
-│   ├── dcgm-exporter.yaml
-│   └── keda-scaledobject.yaml
-└── phase5-model-monitoring/
-    ├── prometheus-rules.yaml          ← latency SLO alert
-    └── drift-detector-cronjob.yaml
+| Phase | Cluster Type | Why |
+|-------|-------------|-----|
+| Phase 1–3 | Managed Node Group | Simplest — CPU workloads, no special node requirements |
+| Phase 4–5 | Karpenter | GPU NodePool scales GPU nodes to zero when idle — critical for cost |
+
+Cluster templates are in `../../tutorials/`. Each phase's `create.sh` tells you which cluster to use.
+
+---
+
+## What You'll Actually Run
+
+```bash
+# 1. Spin up the cluster (one time for Phase 1-3)
+./tutorials/cluster-managed-node-group/create.sh
+
+# 2. Deploy the inference server
+./cicd-and-pipelines/ml-serving/phase1-fastapi/create.sh
+
+# 3. Test it
+kubectl port-forward svc/iris-classifier 8080:80 -n ml-serving
+curl -X POST http://localhost:8080/predict -d '{"features": [5.1, 3.5, 1.4, 0.2]}'
+
+# 4. Tear down the app (keep cluster for next phase)
+./cicd-and-pipelines/ml-serving/phase1-fastapi/destroy.sh
 ```
 
 ---
 
-## Critical Operational Patterns
+## Execution Guide
 
-**Model warm-up**
-Cold start for large models can take 30–120s. Use `minReplicas: 1` in production to avoid scale-from-zero latency spikes.
-
-**Rolling updates need overlap**
-Set `maxSurge: 1` and `maxUnavailable: 0` — never kill the old pod until the new one passes readiness.
-
-**Canary rollback**
-If canary shows degraded accuracy or elevated latency: set `canaryTrafficPercent: 0`. Traffic immediately returns to stable.
-
----
-
-## Integrates With
-
-- [`../service-migration/`](../service-migration/) — canary pattern mirrors blue-green for models
-- [`../observability-ops/`](../observability-ops/) — latency SLOs, error rates, model health dashboards
-- `../../tutorials/cluster-karpenter/` — GPU NodePool for GPU inference workloads
+[playbook.md](playbook.md) — step-by-step from blank AWS account to running predictions, including all commands and expected output.

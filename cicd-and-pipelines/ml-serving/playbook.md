@@ -16,7 +16,7 @@ End-to-end execution guide for deploying and operating ML inference workloads on
 
 **What you build:** A scikit-learn iris classifier served via FastAPI on EKS. Covers the three probe endpoints every ML server needs (`/health`, `/ready`, `/predict`), resource requests sized for inference, and the readiness gate pattern that prevents traffic before the model finishes loading.
 
-**Time:** ~25 minutes (cluster ~15 min, ECR + deploy ~5 min, testing ~5 min)
+**Time:** ~25 minutes (cluster ~15 min, build + deploy ~5 min, testing ~5 min)
 
 ---
 
@@ -43,35 +43,7 @@ aws sts get-caller-identity
 
 ---
 
-### STEP 2 — Set Environment Variables
-One place to configure — every subsequent step reads from these variables.
-
-```bash
-export EKS_CLUSTER_NAME=ml-serving-cluster
-export AWS_REGION=us-east-1
-export K8S_VERSION="1.33"
-export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-export ECR_REPO=iris-classifier
-export ECR_URI=${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}
-
-# Verify
-echo "Cluster  : ${EKS_CLUSTER_NAME}"
-echo "Region   : ${AWS_REGION}"
-echo "Account  : ${AWS_ACCOUNT_ID}"
-echo "K8s ver  : ${K8S_VERSION}"
-echo "ECR URI  : ${ECR_URI}"
-
-# OUTPUT
-Cluster  : ml-serving-cluster
-Region   : us-east-1
-Account  : 123456789012
-K8s ver  : 1.33
-ECR URI  : 123456789012.dkr.ecr.us-east-1.amazonaws.com/iris-classifier
-```
-
----
-
-### STEP 3 — Explore the Repo Structure
+### STEP 2 — Explore the Phase 1 Structure
 Understand what you're about to deploy before deploying it.
 
 ```bash
@@ -85,216 +57,185 @@ cicd-and-pipelines/ml-serving/
 ├── README.md
 ├── playbook.md                         ← you are here
 └── phase1-fastapi/
+    ├── create.sh                       ← builds, pushes, deploys everything
+    ├── destroy.sh                      ← tears down app (cluster stays)
     ├── Dockerfile
     ├── app/
-    │   ├── main.py                     ← FastAPI server: /health /ready /predict
+    │   ├── main.py                     ← FastAPI: /health /ready /predict
     │   └── requirements.txt
     └── k8s/
         ├── namespace.yaml
-        ├── deployment.yaml             ← uses ${ECR_URI} — run through envsubst
+        ├── deployment.yaml             ← ${ECR_URI} resolved at deploy time
         └── service.yaml
 ```
 
 ---
 
-### STEP 4 — Review the FastAPI Inference Server
-Three endpoints are the minimum contract for any ML server on Kubernetes — liveness, readiness, and prediction.
+### STEP 3 — Review the FastAPI Inference Server
+Three endpoints are the minimum contract for any ML server on Kubernetes.
 
 ```bash
 cat cicd-and-pipelines/ml-serving/phase1-fastapi/app/main.py
+```
 
-# Key design decisions visible in the code:
-#
-# /health  → liveness probe  — "is the process alive?" (fast, no model dependency)
-# /ready   → readiness probe — "is the model loaded?" (returns 503 until model is ready)
-# /predict → inference       — only reachable after /ready passes
-#
-# K8s will not send traffic to the pod until /ready returns 200.
-# The readinessProbe.failureThreshold: 6 gives the model 30s (6 x 5s) to load.
+Key design decisions in the code:
+
+```
+/health  → liveness probe  — "is the process alive?"
+           fast check, no model dependency
+           K8s restarts the container if this fails
+
+/ready   → readiness probe — "is the model loaded?"
+           returns HTTP 503 until model.fit() completes
+           K8s holds traffic away from the pod until this passes
+           failureThreshold: 6 × periodSeconds: 5 = 30s to load
+
+/predict → inference endpoint
+           only reachable after /ready has passed
+           returns prediction, class name, confidence score
 ```
 
 ---
 
-### STEP 5 — Create the EKS Managed Node Group Cluster
-Standard 2-node cluster with OIDC enabled — the foundation for all Phase 1–3 tutorials.
+### STEP 4 — Create the EKS Managed Node Group Cluster
+Standard 2-node cluster with OIDC enabled — the foundation for Phase 1–3 tutorials.
 
 ```bash
-# Preview the generated config first
-envsubst < tutorials/cluster-managed-node-group/cluster.yaml
-
-# Create the cluster (~15 minutes)
-envsubst < tutorials/cluster-managed-node-group/cluster.yaml | eksctl create cluster -f -
+# Creates a 2x m5.large managed node group cluster (~15 minutes)
+./tutorials/cluster-managed-node-group/create.sh
 
 # OUTPUT
+╔══════════════════════════════════════════════════╗
+║        EKS — Managed Node Group Cluster         ║
+╠══════════════════════════════════════════════════╣
+║  Cluster  : ml-serving-cluster                  ║
+║  Region   : us-east-1                           ║
+║  K8s      : 1.33                                ║
+║  Nodes    : 2x m5.large (managed node group)    ║
+╚══════════════════════════════════════════════════╝
+
+Proceed? (y/n): y
+
+── Generating cluster config ───────────────────────
+Written: cluster-generated.yaml
+
+── Creating EKS cluster ────────────────────────────
 2026-06-05 10:00:00 [ℹ]  eksctl version 0.225.0
 2026-06-05 10:00:00 [ℹ]  using region us-east-1
-2026-06-05 10:00:05 [ℹ]  setting availability zones to [us-east-1a us-east-1b]
-2026-06-05 10:00:05 [ℹ]  subnets for us-east-1a - public:192.168.0.0/19 private:192.168.64.0/19
-2026-06-05 10:00:05 [ℹ]  subnets for us-east-1b - public:192.168.32.0/19 private:192.168.96.0/19
-2026-06-05 10:00:06 [ℹ]  nodegroup "default" will use "ami-xxxxxxxxxxxxxxxxx" [AmazonLinux2/1.33]
+...
 2026-06-05 10:14:38 [✔]  EKS cluster "ml-serving-cluster" in "us-east-1" region is ready
 
-# Verify nodes are Ready
-kubectl get nodes -o wide
+── Verify ──────────────────────────────────────────
+NAME                           STATUS   ROLES    AGE   VERSION
+ip-192-168-64-12.ec2.internal  Ready    <none>   90s   v1.33.0-eks-a1b2c3d
+ip-192-168-96-47.ec2.internal  Ready    <none>   92s   v1.33.0-eks-a1b2c3d
 
-# OUTPUT
-NAME                           STATUS   ROLES    AGE   VERSION               INTERNAL-IP
-ip-192-168-64-12.ec2.internal  Ready    <none>   90s   v1.33.0-eks-a1b2c3d   192.168.64.12
-ip-192-168-96-47.ec2.internal  Ready    <none>   92s   v1.33.0-eks-a1b2c3d   192.168.96.47
+Cluster ml-serving-cluster is ready.
 ```
 
 ---
 
-### STEP 6 — Create ECR Repository and Push the Image
-Build the container locally, create the ECR repo, authenticate, tag, push.
+### STEP 5 — Build, Push, and Deploy
+`create.sh` handles ECR repository creation, Docker build, push, and Kubernetes deployment in one run.
 
 ```bash
-# Create the ECR repository
-aws ecr create-repository \
-  --repository-name ${ECR_REPO} \
-  --region ${AWS_REGION}
+./cicd-and-pipelines/ml-serving/phase1-fastapi/create.sh
 
 # OUTPUT
-{
-    "repository": {
-        "repositoryArn": "arn:aws:ecr:us-east-1:123456789012:repository/iris-classifier",
-        "repositoryUri": "123456789012.dkr.ecr.us-east-1.amazonaws.com/iris-classifier",
-        ...
-    }
-}
+── Pre-flight checks ───────────────────────────────────────────────────────
+  ✅  EKS cluster ml-serving-cluster is ACTIVE
+  ✅  kubectl connected — 2 node(s) reachable
+  ✅  docker 29.2.1
 
-# Authenticate Docker to ECR
-aws ecr get-login-password --region ${AWS_REGION} | \
-  docker login --username AWS --password-stdin \
-  ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+╔══════════════════════════════════════════════════════════════════════╗
+║           ML Serving — Phase 1: FastAPI Inference Server            ║
+╠══════════════════════════════════════════════════════════════════════╣
+║  Cluster      : ml-serving-cluster                                  ║
+║  Region       : us-east-1                                           ║
+║  Account      : 123456789012                                        ║
+║  ECR repo     : iris-classifier                                     ║
+║  Image tag    : latest                                              ║
+║  Image URI    : 123456789012.dkr.ecr.us-east-1.amazonaws.com/...   ║
+╠══════════════════════════════════════════════════════════════════════╣
+║  Model        : scikit-learn RandomForest (iris classifier)         ║
+║  Replicas     : 2 (one per AZ)                                      ║
+║  Resources    : 250m CPU / 256Mi memory per pod                     ║
+║  Probes       : /health (liveness) /ready (readiness)               ║
+╚══════════════════════════════════════════════════════════════════════╝
 
-# OUTPUT
-Login Succeeded
+Proceed? (y/n): y
 
-# Build image (run from phase1-fastapi directory)
-cd cicd-and-pipelines/ml-serving/phase1-fastapi
+── STEP 1: Create ECR repository ───────────────────────────────────────────
+  Created: 123456789012.dkr.ecr.us-east-1.amazonaws.com/iris-classifier
 
-docker build -t ${ECR_REPO}:latest .
+── STEP 2: Authenticate Docker to ECR ──────────────────────────────────────
+  Authenticated.
 
-# OUTPUT
-[+] Building 42.3s (9/9) FINISHED
- => [1/4] FROM docker.io/library/python:3.11-slim
- => [2/4] WORKDIR /app
- => [3/4] COPY app/requirements.txt .
- => [4/4] RUN pip install --no-cache-dir -r requirements.txt
- => exporting to image
+── STEP 3: Build container image ───────────────────────────────────────────
+  [+] Building 42.3s (8/8) FINISHED
+  Built: iris-classifier:latest
 
-# Tag and push
-docker tag ${ECR_REPO}:latest ${ECR_URI}:latest
-docker push ${ECR_URI}:latest
+── STEP 4: Tag and push to ECR ─────────────────────────────────────────────
+  latest: digest: sha256:a1b2c3d4e5f6... size: 312456789
+  Pushed: 123456789012.dkr.ecr.us-east-1.amazonaws.com/iris-classifier:latest
 
-# OUTPUT
-latest: digest: sha256:a1b2c3d4e5f6... size: 312456789
+── STEP 5: Deploy to EKS ───────────────────────────────────────────────────
+  Namespace applied.
+  Deployment applied.
+  Service applied.
 
-# Back to repo root
-cd ../../..
+── STEP 6: Wait for rollout ─────────────────────────────────────────────────
+  Waiting for deployment "iris-classifier" rollout to finish...
+  deployment "iris-classifier" successfully rolled out
+
+── STEP 7: Verify ───────────────────────────────────────────────────────────
+NAME                               READY   STATUS    NODE
+iris-classifier-6d8f9c7b4-kxp2m   2/2     Running   ip-192-168-64-12.ec2.internal
+iris-classifier-6d8f9c7b4-rnt9q   2/2     Running   ip-192-168-96-47.ec2.internal
+
+iris-classifier is ready.
+
+⏱  Started : 10:15:00
+⏱  Finished: 10:19:47
+⏱  Elapsed : 4m 47s
 ```
 
 ---
 
-### STEP 7 — Deploy to EKS
-Apply manifests in order — namespace first, then workloads.
-
-```bash
-cd cicd-and-pipelines/ml-serving/phase1-fastapi
-
-# Namespace
-kubectl apply -f k8s/namespace.yaml
-
-# Deployment — pipe through envsubst to resolve ${ECR_URI}
-envsubst < k8s/deployment.yaml | kubectl apply -f -
-
-# Service
-kubectl apply -f k8s/service.yaml
-
-# Watch the rollout — you'll see pods go NotReady → Ready as the model loads
-kubectl rollout status deployment/iris-classifier -n ml-serving
-
-# OUTPUT
-Waiting for deployment "iris-classifier" rollout to finish: 0 of 2 updated replicas are available...
-Waiting for deployment "iris-classifier" rollout to finish: 1 of 2 updated replicas are available...
-deployment "iris-classifier" successfully rolled out
-
-# Confirm both pods are Running and Ready (2/2)
-kubectl get pods -n ml-serving -o wide
-
-# OUTPUT
-NAME                               READY   STATUS    RESTARTS   AGE   NODE
-iris-classifier-6d8f9c7b4-kxp2m   2/2     Running   0          45s   ip-192-168-64-12.ec2.internal
-iris-classifier-6d8f9c7b4-rnt9q   2/2     Running   0          45s   ip-192-168-96-47.ec2.internal
-
-cd ../../..
-```
-
----
-
-### STEP 8 — Test the Inference Endpoint
+### STEP 6 — Test the Inference Endpoint
 Port-forward the ClusterIP service and run predictions against the model.
 
 ```bash
 # Port-forward in background
 kubectl port-forward svc/iris-classifier 8080:80 -n ml-serving &
 
-# Wait a second for the tunnel to open
 sleep 2
 
-# Test liveness probe
+# Liveness probe
 curl -s http://localhost:8080/health | python3 -m json.tool
+# { "status": "alive" }
 
-# OUTPUT
-{
-    "status": "alive"
-}
-
-# Test readiness probe — confirms model is loaded
+# Readiness probe — confirms model is loaded and serving
 curl -s http://localhost:8080/ready | python3 -m json.tool
+# { "status": "ready", "model_load_seconds": 0.241 }
 
-# OUTPUT
-{
-    "status": "ready",
-    "model_load_seconds": 0.241
-}
-
-# Predict — Iris setosa (short petals, wide sepals)
+# Predict — Iris setosa (short petals)
 curl -s -X POST http://localhost:8080/predict \
   -H "Content-Type: application/json" \
   -d '{"features": [5.1, 3.5, 1.4, 0.2]}' | python3 -m json.tool
+# { "prediction": 0, "class_name": "setosa", "confidence": 0.97 }
 
-# OUTPUT
-{
-    "prediction": 0,
-    "class_name": "setosa",
-    "confidence": 0.97
-}
-
-# Predict — Iris virginica (long petals, large everything)
+# Predict — Iris virginica (long petals)
 curl -s -X POST http://localhost:8080/predict \
   -H "Content-Type: application/json" \
   -d '{"features": [6.7, 3.0, 5.2, 2.3]}' | python3 -m json.tool
+# { "prediction": 2, "class_name": "virginica", "confidence": 0.89 }
 
-# OUTPUT
-{
-    "prediction": 2,
-    "class_name": "virginica",
-    "confidence": 0.89
-}
-
-# Predict — Iris versicolor (middle ground)
+# Predict — Iris versicolor
 curl -s -X POST http://localhost:8080/predict \
   -H "Content-Type: application/json" \
   -d '{"features": [5.9, 3.0, 4.2, 1.5]}' | python3 -m json.tool
-
-# OUTPUT
-{
-    "prediction": 1,
-    "class_name": "versicolor",
-    "confidence": 0.82
-}
+# { "prediction": 1, "class_name": "versicolor", "confidence": 0.82 }
 
 # Stop port-forward
 kill %1
@@ -302,76 +243,62 @@ kill %1
 
 ---
 
-### STEP 9 — Observe Key Kubernetes Behaviors
-Watch what Kubernetes actually did — probe events, scheduling decisions, readiness gates.
+### STEP 7 — Observe Key Kubernetes Behaviors
+Watch what Kubernetes actually did — probe events, scheduling, readiness gates in action.
 
 ```bash
-# Event stream — shows probe failures before model loaded, then Readiness success
+# Event stream — probe failures before model loads, then Ready
 kubectl get events -n ml-serving --sort-by='.lastTimestamp' | tail -20
 
-# OUTPUT (you'll see this sequence)
-# 10s   Normal   Scheduled     pod/iris-classifier-...   Successfully assigned ml-serving/... to ip-192-168-64-12
-# 8s    Normal   Pulled        pod/iris-classifier-...   Container image already present on machine
-# 8s    Normal   Created       pod/iris-classifier-...   Created container iris-classifier
-# 8s    Normal   Started       pod/iris-classifier-...   Started container iris-classifier
-# 3s    Warning  Unhealthy     pod/iris-classifier-...   Readiness probe failed: Get "http://.../ready": 503
-# 0s    Normal   Ready         pod/iris-classifier-...   (combined from similar events): True
+# OUTPUT (the sequence you'll see)
+# Normal   Scheduled   pod/iris-classifier-...   Assigned to ip-192-168-64-12
+# Normal   Pulled      pod/iris-classifier-...   Container image pulled
+# Normal   Started     pod/iris-classifier-...   Started container
+# Warning  Unhealthy   pod/iris-classifier-...   Readiness probe failed: 503  ← model loading
+# Normal   Ready       pod/iris-classifier-...   True                          ← model loaded
 
-# See which node each replica was scheduled on
+# Replica placement — one pod per AZ
 kubectl get pods -n ml-serving -o wide
 
-# Check resource consumption (Metrics Server is included in managed node group addons)
+# Resource usage
 kubectl top pods -n ml-serving
+# NAME                               CPU(cores)   MEMORY(bytes)
+# iris-classifier-6d8f9c7b4-kxp2m   4m           148Mi
+# iris-classifier-6d8f9c7b4-rnt9q   3m           151Mi
 
-# OUTPUT
-NAME                               CPU(cores)   MEMORY(bytes)
-iris-classifier-6d8f9c7b4-kxp2m   4m           148Mi
-iris-classifier-6d8f9c7b4-rnt9q   3m           151Mi
-
-# Describe the Deployment — shows probe config, resource requests, replica strategy
-kubectl describe deployment iris-classifier -n ml-serving
+# Probe configuration in the Deployment spec
+kubectl describe deployment iris-classifier -n ml-serving | grep -A 10 "Liveness\|Readiness"
 ```
 
 ---
 
-### STEP 10 — Tear Down
-Remove the app but keep the cluster running for Phase 2 (KServe). Full cluster destroy is at the bottom.
+### STEP 8 — Tear Down
+Remove the app but keep the cluster for Phase 2.
 
 ```bash
-# Remove app only — namespace deletion cascades to all resources inside it
-kubectl delete namespace ml-serving
-
-# Verify gone
-kubectl get all -n ml-serving
-# Error from server (NotFound): namespaces "ml-serving" not found
-
-# Also clean up the ECR repo if done with Phase 1
-aws ecr delete-repository \
-  --repository-name ${ECR_REPO} \
-  --region ${AWS_REGION} \
-  --force
-```
-
----
-
-### Full Cluster Destroy (when done with all phases)
-Tear down the EKS cluster and all AWS resources created by eksctl.
-
-```bash
-# Delete cluster (~10 minutes)
-envsubst < tutorials/cluster-managed-node-group/cluster.yaml | eksctl delete cluster -f -
+./cicd-and-pipelines/ml-serving/phase1-fastapi/destroy.sh
 
 # OUTPUT
-2026-06-05 12:00:00 [ℹ]  deleting EKS cluster "ml-serving-cluster"
-2026-06-05 12:00:02 [ℹ]  deleting CloudFormation stack "eksctl-ml-serving-cluster-nodegroup-default"
-2026-06-05 12:07:44 [ℹ]  deleting CloudFormation stack "eksctl-ml-serving-cluster-cluster"
-2026-06-05 12:10:21 [✔]  all cluster resources were deleted
+── Destroying Phase 1: FastAPI Inference Server ────────────────────────────
+  Cluster: kept running
+  Removing: ml-serving namespace, ECR repo iris-classifier
 
-# Verify — should return empty or AccessDenied (cluster gone)
-aws eks describe-cluster --name ${EKS_CLUSTER_NAME} --region ${AWS_REGION}
-# An error occurred (ResourceNotFoundException): No cluster found for name: ml-serving-cluster
+Proceed? (y/n): y
+
+── STEP 1: Delete ml-serving namespace ─────────────────────────────────────
+  Namespace ml-serving deleted.
+
+── STEP 2: Delete ECR repository ───────────────────────────────────────────
+  ECR repository iris-classifier deleted.
+
+── STEP 3: Verify ───────────────────────────────────────────────────────────
+  ✅  Namespace ml-serving: deleted
+  ✅  ECR iris-classifier: deleted
+
+Cluster is still running. When done with all phases:
+  ./tutorials/cluster-managed-node-group/destroy.sh
 ```
 
 ---
 
-**Next:** [Phase 2 — KServe InferenceService](phase2-kserve/) — swap the FastAPI server for a CRD-driven serving runtime backed by S3 model storage. Same iris model, production-grade serving infrastructure.
+**Next:** Phase 2 — KServe InferenceService — same iris model, production-grade serving runtime backed by S3 model storage and CRD-driven configuration.
