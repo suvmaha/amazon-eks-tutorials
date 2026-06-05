@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-consumer
+  namespace: kafka-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka-consumer
+  template:
+    metadata:
+      labels:
+        app: kafka-consumer
+    spec:
+      containers:
+        - name: consumer
+          image: ${ECR_URI_CONSUMER}:latest
+          env:
+            - name: KAFKA_BOOTSTRAP
+              value: ml-events-kafka-bootstrap.kafka:9092
+            - name: KAFKA_TOPIC
+              value: ml-detections
+            - name: KAFKA_GROUP_ID
+              value: ml-pipeline-group
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi

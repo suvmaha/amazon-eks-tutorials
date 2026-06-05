@@ -1,0 +1,58 @@
+name: Deploy to EKS
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'cicd-and-pipelines/github-actions-eks/phase1-basic/**'
+
+permissions:
+  id-token: write   # required for OIDC token request
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push image
+        id: build
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build \
+            -t $ECR_REGISTRY/hello-eks:$IMAGE_TAG \
+            cicd-and-pipelines/github-actions-eks/phase1-basic/app
+          docker push $ECR_REGISTRY/hello-eks:$IMAGE_TAG
+          echo "ECR_REGISTRY=$ECR_REGISTRY" >> $GITHUB_OUTPUT
+          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig \
+            --name ${{ vars.EKS_CLUSTER_NAME }} \
+            --region ${{ vars.AWS_REGION }}
+
+      - name: Deploy to EKS
+        env:
+          ECR_REGISTRY: ${{ steps.build.outputs.ECR_REGISTRY }}
+          IMAGE_TAG: ${{ steps.build.outputs.IMAGE_TAG }}
+        run: |
+          kubectl apply -f cicd-and-pipelines/github-actions-eks/phase1-basic/k8s/namespace.yaml
+          envsubst < cicd-and-pipelines/github-actions-eks/phase1-basic/k8s/deployment.yaml | kubectl apply -f -
+          kubectl apply -f cicd-and-pipelines/github-actions-eks/phase1-basic/k8s/service.yaml
+          kubectl rollout status deployment/hello-eks -n hello-eks --timeout=120s

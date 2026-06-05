@@ -1,0 +1,18 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: iris-classifier
+  namespace: monitoring
+  labels:
+    release: kube-prom    # must match Helm release for Prometheus operator to pick it up
+spec:
+  namespaceSelector:
+    matchNames:
+      - ml-serving
+  selector:
+    matchLabels:
+      app: iris-classifier
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s

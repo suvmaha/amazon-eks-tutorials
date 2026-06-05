@@ -1,0 +1,57 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: slo-alerts
+  namespace: monitoring
+  labels:
+    release: kube-prom    # must match the Helm release name for Prometheus to pick it up
+spec:
+  groups:
+    - name: slo.availability
+      rules:
+        # Fast burn: burning error budget 14.4x faster than allowed
+        # At this rate, 1 month of budget exhausted in ~2 days — page immediately
+        - alert: SLOFastBurn
+          expr: |
+            (
+              rate(http_requests_total{status=~"5.."}[1h]) /
+              rate(http_requests_total[1h])
+            ) > (14.4 * 0.001)
+          for: 2m
+          labels:
+            severity: critical
+            slo: availability
+          annotations:
+            summary: "Error budget burning fast — page on-call"
+            description: "Error rate {{ $value | humanizePercentage }} over last 1h. SLO: 99.9%."
+            runbook_url: "https://github.com/suvmaha/amazon-eks-tutorials/blob/main/cicd-and-pipelines/observability-ops/phase1-prometheus-stack/runbooks/high-error-rate.md"
+
+        # Slow burn: on pace to exhaust budget this month — Slack warning
+        - alert: SLOSlowBurn
+          expr: |
+            (
+              rate(http_requests_total{status=~"5.."}[6h]) /
+              rate(http_requests_total[6h])
+            ) > (1 * 0.001)
+          for: 15m
+          labels:
+            severity: warning
+            slo: availability
+          annotations:
+            summary: "Error budget slowly draining"
+            description: "Error rate {{ $value | humanizePercentage }} over last 6h is above SLO threshold."
+
+    - name: slo.latency
+      rules:
+        - alert: HighP99Latency
+          expr: |
+            histogram_quantile(0.99,
+              rate(http_request_duration_seconds_bucket[5m])
+            ) > 0.5
+          for: 5m
+          labels:
+            severity: warning
+            slo: latency
+          annotations:
+            summary: "P99 latency above 500ms"
+            description: "P99 latency is {{ $value | humanizeDuration }} — SLO target: 500ms."

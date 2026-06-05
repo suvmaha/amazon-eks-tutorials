@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: webapp
+  namespace: migration-demo
+spec:
+  selector:
+    app: webapp
+    version: blue    # starts pointing at blue — cutover.sh changes this to green
+  ports:
+    - port: 80
+      targetPort: 80
+  type: ClusterIP

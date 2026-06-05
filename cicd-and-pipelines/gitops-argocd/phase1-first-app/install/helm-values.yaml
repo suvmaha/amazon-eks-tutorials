@@ -1,0 +1,25 @@
+server:
+  insecure: true    # lab only — disables HTTPS redirect so port-forward works without TLS
+
+configs:
+  params:
+    server.insecure: true
+
+# Reduce resource footprint for lab cluster
+controller:
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+
+repoServer:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+server:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi

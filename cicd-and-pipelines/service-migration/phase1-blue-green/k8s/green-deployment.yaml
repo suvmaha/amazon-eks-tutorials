@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: green-v2
+  namespace: migration-demo
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: webapp
+      version: green
+  template:
+    metadata:
+      labels:
+        app: webapp
+        version: green
+    spec:
+      containers:
+        - name: webapp
+          image: nginx:alpine
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - name: content
+              mountPath: /usr/share/nginx/html
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+      volumes:
+        - name: content
+          configMap:
+            name: green-content
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: green-content
+  namespace: migration-demo
+data:
+  index.html: |
+    v2 — new

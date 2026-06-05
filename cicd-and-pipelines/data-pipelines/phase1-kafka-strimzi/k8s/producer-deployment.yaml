@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-producer
+  namespace: kafka-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka-producer
+  template:
+    metadata:
+      labels:
+        app: kafka-producer
+    spec:
+      containers:
+        - name: producer
+          image: ${ECR_URI_PRODUCER}:latest
+          env:
+            - name: KAFKA_BOOTSTRAP
+              value: ml-events-kafka-bootstrap.kafka:9092
+            - name: KAFKA_TOPIC
+              value: ml-detections
+            - name: SEND_INTERVAL_SECONDS
+              value: "1"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi

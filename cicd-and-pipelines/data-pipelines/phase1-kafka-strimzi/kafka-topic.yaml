@@ -1,0 +1,13 @@
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: ml-detections
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: ml-events
+spec:
+  partitions: 3
+  replicas: 3
+  config:
+    retention.ms: 604800000    # 7 days
+    segment.bytes: 104857600   # 100MB segments

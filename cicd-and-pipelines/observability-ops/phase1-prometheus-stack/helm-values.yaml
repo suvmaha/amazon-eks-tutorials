@@ -1,0 +1,33 @@
+grafana:
+  adminPassword: admin
+  defaultDashboardsEnabled: true
+  persistence:
+    enabled: false    # lab — no persistent storage needed
+
+prometheus:
+  prometheusSpec:
+    retention: 7d
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+
+alertmanager:
+  alertmanagerSpec:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+
+# Reduce node-exporter resource requests for lab cluster
+nodeExporter:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+
+kubeStateMetrics:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi

@@ -1,152 +1,78 @@
 # Data and ML Pipelines on EKS
 
-Build streaming and batch data pipelines that run on Kubernetes — from event ingestion through ML model outputs to downstream data stores.
+## The Problem
+
+ML models produce outputs. Those outputs need to go somewhere: a database, a data warehouse, a downstream service, a basemap. The naive approach is point-to-point: the model writes directly to the destination. This works until the destination is slow, unavailable, or the model output rate exceeds what the destination can absorb. Then you get backpressure, dropped events, and silent data loss.
+
+The second problem is schema drift. The model team changes the output format — a field renamed, a type changed, a new nested object added. The consumer breaks. Nobody notices until a data quality alert fires three days later when the missing data shows up in a dashboard.
+
+The third problem is observability. A batch job ran. Did it process all records? How many failed? How long did it take? Without explicit instrumentation, the answer is "check the logs" — which means grep through gigabytes of output with no structured query interface.
 
 ---
 
-## What You'll Build
+## The Solution
 
-| Phase | What | Concepts |
-|-------|------|----------|
-| **Phase 1** | Kafka on EKS with Strimzi operator | StatefulSet-based Kafka, topic creation, producer/consumer |
-| **Phase 2** | Kinesis consumer as a Kubernetes Job | KEDA trigger, Kinesis shard consumer, checkpointing |
-| **Phase 3** | ML output pipeline — inference results → downstream sink | Consumer of model outputs, schema contract, write to S3/DynamoDB |
-| **Phase 4** | Feature pipeline — source data → feature store | Feast on EKS, feature transforms, online/offline store |
-| **Phase 5** | Spark/Flink on EKS — batch processing | Spark Operator, job submission, S3 output, monitoring |
+An event-driven pipeline on EKS decouples producers from consumers, enforces schema contracts, and makes every stage observable.
+
+```
+  ML Model (EKS pod)
+        │  produces detection events
+        ▼
+  Kafka topic  (Strimzi on EKS)
+  ├─ durable — events persist even if consumer is down
+  ├─ replayable — reprocess from any offset
+  └─ schema-validated — Avro schema enforced at produce time
+        │
+        ▼
+  Pipeline Consumer (EKS Deployment)
+  ├─ reads from Kafka topic
+  ├─ validates + enriches each event
+  ├─ writes to S3 (Parquet, partitioned by date)    ← offline/batch
+  └─ writes to DynamoDB (hot path)                   ← realtime lookup
+        │
+        ▼
+  KEDA ScaledObject
+  └─ scales consumer pods on Kafka consumer lag
+     (more lag → more pods → lag drains)
+```
+
+**Schema contract:** Avro schema registered in a schema registry. Producers validate before sending. Consumers validate before processing. Schema changes require a registry update — breakage is caught at the registry, not in production at 2am.
+
+**Dead letter queue:** Events that fail validation or processing go to a DLQ topic — not dropped. DLQ events include the original payload plus error context. Replayable after the bug is fixed.
 
 ---
 
-## Phase 1: Kafka on EKS with Strimzi
+## Phase Progression
 
-Strimzi is the Kubernetes operator for Apache Kafka — defines clusters, topics, and users as Kubernetes CRDs.
+| Phase | What | Problem it solves |
+|-------|------|-------------------|
+| **Phase 1** | Kafka on EKS with Strimzi — producer + consumer | Durable, replayable event stream between services |
+| **Phase 2** | Kinesis consumer as a Kubernetes Deployment | AWS-managed stream → EKS consumer (no broker to operate) |
+| **Phase 3** | ML output pipeline — inference → Kafka → S3 + DynamoDB | End-to-end ML output flow with schema validation and DLQ |
+| **Phase 4** | KEDA auto-scaling on consumer lag | Consumer pods scale with demand — no manual capacity planning |
+| **Phase 5** | Spark on EKS — batch reprocessing | Replay historical events through updated pipeline logic |
 
-```yaml
-apiVersion: kafka.strimzi.io/v1beta2
-kind: Kafka
-metadata:
-  name: ml-events
-  namespace: kafka
-spec:
-  kafka:
-    replicas: 3
-    listeners:
-      - name: plain
-        port: 9092
-        type: internal
-    storage:
-      type: jbod
-      volumes:
-        - id: 0
-          type: persistent-claim
-          size: 10Gi
-          class: gp3
-  zookeeper:
-    replicas: 3
-    storage:
-      type: persistent-claim
-      size: 5Gi
-      class: gp3
+---
+
+## What You'll Actually Run
+
+```bash
+# 1. Cluster must be running (Kafka needs persistent storage — EBS CSI required)
+./tutorials/cluster-managed-node-group/create.sh
+
+# 2. Install Strimzi, create Kafka cluster, deploy producer + consumer
+./cicd-and-pipelines/data-pipelines/phase1-kafka-strimzi/create.sh
+
+# 3. Watch events flow from producer → Kafka → consumer
+kubectl logs -l app=kafka-producer -n kafka-demo -f
+kubectl logs -l app=kafka-consumer -n kafka-demo -f
+
+# 4. Tear down
+./cicd-and-pipelines/data-pipelines/phase1-kafka-strimzi/destroy.sh
 ```
 
 ---
 
-## Phase 3: ML Output → Downstream Sink Pattern
+## Execution Guide
 
-```
-ML Model (EKS pod)
-      │  produces predictions
-      ▼
-Kafka topic: ml.detections.buildings
-      │
-      ▼
-Pipeline Consumer (EKS Deployment)
-  ├─ validates schema
-  ├─ enriches with metadata
-  └─ writes → S3 (Parquet) + DynamoDB (hot path)
-```
-
-Schema contract lives in a registry (AWS Glue Schema Registry or Confluent Schema Registry) — producers and consumers both validate against it.
-
----
-
-## Folder Structure
-
-```
-data-pipelines/
-├── README.md                           ← you are here
-├── phase1-kafka-strimzi/
-│   ├── install/                        ← Strimzi operator install
-│   ├── kafka-cluster.yaml
-│   ├── kafka-topic.yaml
-│   ├── producer-app/                   ← sample Python producer
-│   └── consumer-app/                  ← sample Python consumer
-├── phase2-kinesis-consumer/
-│   ├── consumer-deployment.yaml
-│   ├── keda-scaledobject.yaml          ← scale on shard lag
-│   └── consumer-app/
-├── phase3-ml-output-pipeline/
-│   ├── schema/
-│   │   └── detection-event.avsc       ← Avro schema definition
-│   ├── pipeline-deployment.yaml
-│   ├── configmap-sink-config.yaml
-│   └── pipeline-app/                  ← validate → enrich → write
-├── phase4-feature-pipeline/
-│   ├── feast/                          ← Feast feature store on EKS
-│   └── transform-job/
-└── phase5-spark-on-eks/
-    ├── spark-operator-install/
-    ├── spark-application.yaml
-    └── batch-job-app/
-```
-
----
-
-## Pipeline Design Principles
-
-**Schema-first**
-Define the schema contract before writing producer or consumer code. Use Avro or Protobuf — enforced at the registry, not just in documentation.
-
-**Idempotent consumers**
-Consumers must handle re-processing (at-least-once delivery from Kafka/Kinesis). Use record IDs to deduplicate on the sink side.
-
-**Checkpointing**
-Consumer offset (Kafka) or shard iterator (Kinesis) must be committed after successful write to sink — never before.
-
-**Dead letter queue**
-Messages that fail validation or processing go to a DLQ topic/queue with full metadata for investigation. Never silently drop.
-
-**Handoff-ready documentation**
-Each pipeline component has:
-- Input schema + example event
-- Output schema + example record
-- What "done" looks like (clear completion state or SLA)
-- What requires follow-up (explicit TODO with context)
-
----
-
-## KEDA: Scale Consumer Pods on Kafka Lag
-
-```yaml
-apiVersion: keda.sh/v1alpha1
-kind: ScaledObject
-metadata:
-  name: kafka-consumer-scaler
-spec:
-  scaleTargetRef:
-    name: ml-pipeline-consumer
-  triggers:
-    - type: kafka
-      metadata:
-        bootstrapServers: ml-events-kafka-bootstrap.kafka:9092
-        consumerGroup: ml-pipeline-group
-        topic: ml.detections.buildings
-        lagThreshold: "100"      # scale up when lag > 100 messages
-```
-
----
-
-## Integrates With
-
-- [`../ml-serving/`](../ml-serving/) — pipeline consumes outputs from inference servers
-- [`../observability-ops/`](../observability-ops/) — consumer lag, processing latency, DLQ depth as key metrics
-- `../../tutorials/cluster-karpenter/` — Karpenter scales consumer nodes on demand
+[playbook.md](playbook.md) — step-by-step from Strimzi installation through a live producer/consumer pair with visible message flow.

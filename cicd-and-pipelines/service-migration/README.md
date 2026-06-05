@@ -1,106 +1,81 @@
 # Service Migration Patterns on EKS
 
-Move services between environments or infrastructure with controlled risk: blue-green cutover, canary traffic shifting, environment parity validation, and rollback-first runbooks.
+## The Problem
+
+Migrations fail in predictable ways. The most common: staging passes, production breaks. Not because the code is wrong — because the environments were never actually equivalent. Staging has different memory quotas, different network policies, different IAM bindings, different ConfigMap values someone changed six months ago and never documented.
+
+The second failure mode is the cutover itself. A team decides to migrate at 10pm on a Tuesday. They `kubectl set image` the Deployment. The new image takes 45 seconds to start. During those 45 seconds, all traffic goes to pods that don't exist yet. Users see 503s. The team reverts, but revert takes another 45 seconds, and now they've had 90 seconds of downtime and a 2am postmortem.
+
+The third failure mode: no defined rollback criteria. The team watches dashboards after cutover but nobody decided in advance what number triggers a rollback. By the time someone says "this looks bad," they've been degraded for 8 minutes.
 
 ---
 
-## What You'll Build
+## The Solution
 
-| Phase | What | Concepts |
-|-------|------|----------|
-| **Phase 1** | Environment parity checklist — diff staging vs prod configs | ConfigMap/Secret audit, resource quota comparison |
-| **Phase 2** | Blue-green cutover using Kubernetes Services | Two Deployments, one Service selector flip |
-| **Phase 3** | Canary with weighted routing (AWS ALB) | Ingress annotations, traffic split, progressive shift |
-| **Phase 4** | Traffic mirroring — shadow prod traffic to new version | Mirror annotation, no user impact testing |
-| **Phase 5** | Full migration runbook — cutover + validation + rollback | Go/no-go checklist, rollback triggers, postmortem template |
+Three patterns, applied in sequence:
+
+**1. Environment parity first.** Before any cutover, diff the two environments systematically — ConfigMaps, Secrets, resource quotas, IAM bindings, network policies. Fix the gaps, then run integration tests against the target environment.
+
+**2. Blue-green for zero-downtime cutover.** Run old (blue) and new (green) simultaneously. Green gets validated while blue serves traffic. Cutover is a single Service selector patch — instant, no downtime. Rollback is the same patch in reverse.
+
+**3. Define rollback criteria before you start.** Write the numbers down: if error rate exceeds X% for Y minutes, or P99 latency exceeds Z ms — execute rollback immediately without debate.
+
+```
+  Before cutover:
+  ┌─────────────────────────────────────┐
+  │  Service (selector: version=blue)  │──► Deployment blue (current, stable)
+  │                                     │    Deployment green (new, being tested)
+  └─────────────────────────────────────┘
+
+  Cutover — one kubectl patch:
+  ┌─────────────────────────────────────┐
+  │  Service (selector: version=green) │──► Deployment green (now serving traffic)
+  │                                     │    Deployment blue (standing by for rollback)
+  └─────────────────────────────────────┘
+
+  Rollback — same patch, reversed:
+  ┌─────────────────────────────────────┐
+  │  Service (selector: version=blue)  │──► Deployment blue (back in service, <1s)
+  └─────────────────────────────────────┘
+```
+
+Blue is never torn down until green has been stable for a defined period. Rollback is always available.
 
 ---
 
-## Phase 2: Blue-Green in 3 Steps
+## Phase Progression
 
-```
-Before:
-  Service (selector: version=blue) → Deployment blue (current)
-  Deployment green (new) ← being tested in parallel
+| Phase | What | Problem it solves |
+|-------|------|-------------------|
+| **Phase 1** | Blue-green with Service selector flip | Zero-downtime cutover, instant rollback |
+| **Phase 2** | Environment parity audit — diff staging vs prod | Catch config drift before it causes a production incident |
+| **Phase 3** | Canary with ALB weighted routing | Progressive traffic shift — catch regressions at 5% before they hit 100% |
+| **Phase 4** | Traffic mirroring — shadow prod traffic to new version | Test new version against real prod traffic with zero user impact |
+| **Phase 5** | Full migration runbook template | Codify go/no-go criteria, cutover steps, rollback triggers, postmortem |
 
-Cutover:
-  Service selector: version=green  ← one patch, instant switch
+---
 
-Rollback:
-  Service selector: version=blue   ← revert in seconds
-```
+## What You'll Actually Run
 
 ```bash
-# Deploy green alongside blue
-kubectl apply -f deployment-green.yaml
+# 1. Cluster must be running
+./tutorials/cluster-managed-node-group/create.sh
 
-# Validate green (smoke test, integration test)
-kubectl port-forward svc/myapp-green 8080:80
+# 2. Deploy blue (stable) version
+./cicd-and-pipelines/service-migration/phase1-blue-green/create.sh
 
-# Cut over — single patch, zero downtime
-kubectl patch service myapp -p '{"spec":{"selector":{"version":"green"}}}'
+# 3. Simulate cutover to green
+./cicd-and-pipelines/service-migration/phase1-blue-green/cutover.sh
 
-# Rollback if needed
-kubectl patch service myapp -p '{"spec":{"selector":{"version":"blue"}}}'
+# 4. Simulate rollback
+./cicd-and-pipelines/service-migration/phase1-blue-green/rollback.sh
+
+# 5. Tear down
+./cicd-and-pipelines/service-migration/phase1-blue-green/destroy.sh
 ```
 
 ---
 
-## Folder Structure
+## Execution Guide
 
-```
-service-migration/
-├── README.md                       ← you are here
-├── phase1-env-parity/
-│   ├── parity-checklist.md        ← environment comparison template
-│   └── scripts/audit-configs.sh   ← diff ConfigMaps/Secrets across namespaces
-├── phase2-blue-green/
-│   ├── deployment-blue.yaml
-│   ├── deployment-green.yaml
-│   ├── service.yaml               ← selector toggles between blue/green
-│   └── cutover.sh                 ← parameterized cutover script
-├── phase3-canary-alb/
-│   ├── ingress-stable.yaml
-│   ├── ingress-canary.yaml        ← ALB weighted target groups
-│   └── shift-traffic.sh          ← progressive weight update
-├── phase4-traffic-mirror/
-│   └── ingress-mirror.yaml
-└── phase5-migration-runbook/
-    ├── runbook-template.md        ← go/no-go, cutover steps, rollback triggers
-    └── postmortem-template.md
-```
-
----
-
-## Environment Parity Checklist
-
-Before any migration, verify:
-
-- [ ] K8s version matches (source vs target cluster)
-- [ ] ConfigMaps and Secrets present in target namespace
-- [ ] IAM roles / IRSA bindings created in target account/cluster
-- [ ] PVC storage class available and tested
-- [ ] Network policies allow required service-to-service traffic
-- [ ] Resource quotas accommodate workload
-- [ ] Integration tests pass against target environment
-- [ ] Monitoring and alerting wired to target
-
----
-
-## Rollback Triggers (define before cutover)
-
-Define your rollback conditions in advance:
-- Error rate exceeds X% for Y minutes
-- P99 latency exceeds Z ms
-- Health check endpoint returns non-200
-- Downstream consumer reports data errors
-
-Rollback is always faster than debugging live — have the command ready.
-
----
-
-## Integrates With
-
-- [`../gitops-argocd/`](../gitops-argocd/) — ArgoCD ApplicationSet manages blue/green Applications
-- [`../observability-ops/`](../observability-ops/) — metrics and alerts drive go/no-go decisions
-- [`../github-actions-eks/`](../github-actions-eks/) — CI deploys green, human approves cutover
+[playbook.md](playbook.md) — step-by-step from deploying blue through cutover, rollback, and the criteria that trigger each.
