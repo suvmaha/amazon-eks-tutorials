@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cart
+  namespace: retail-store
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cart
+  template:
+    metadata:
+      labels:
+        app: cart
+    spec:
+      containers:
+        - name: cart
+          image: public.ecr.aws/aws-containers/retail-store-sample-cart:0.8.3
+          ports:
+            - containerPort: 8080
+          env:
+            - name: RETAIL_CART_PERSISTENCE_PROVIDER
+              value: dynamodb
+            - name: RETAIL_CART_DYNAMODB_ENDPOINT
+              value: http://carts-dynamodb:8000
+            - name: RETAIL_CART_DYNAMODB_REGION
+              value: us-east-1
+            - name: RETAIL_CART_DYNAMODB_TABLE_NAME
+              value: Items
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cart
+  namespace: retail-store
+spec:
+  selector:
+    app: cart
+  ports:
+    - port: 80
+      targetPort: 8080
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: carts-dynamodb
+  namespace: retail-store
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: carts-dynamodb
+  template:
+    metadata:
+      labels:
+        app: carts-dynamodb
+    spec:
+      containers:
+        - name: dynamodb
+          image: amazon/dynamodb-local:2.0.0
+          ports:
+            - containerPort: 8000
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: carts-dynamodb
+  namespace: retail-store
+spec:
+  selector:
+    app: carts-dynamodb
+  ports:
+    - port: 8000
+  type: ClusterIP

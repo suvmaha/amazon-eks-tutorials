@@ -1,0 +1,116 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: catalog
+  namespace: retail-store
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: catalog
+  template:
+    metadata:
+      labels:
+        app: catalog
+    spec:
+      containers:
+        - name: catalog
+          image: public.ecr.aws/aws-containers/retail-store-sample-catalog:0.8.3
+          ports:
+            - containerPort: 8080
+          env:
+            - name: DB_HOST
+              value: catalog-mysql
+            - name: DB_NAME
+              value: catalog
+            - name: DB_USER
+              value: catalog_user
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: catalog-db
+                  key: password
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: catalog
+  namespace: retail-store
+spec:
+  selector:
+    app: catalog
+  ports:
+    - port: 80
+      targetPort: 8080
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: catalog-db
+  namespace: retail-store
+stringData:
+  password: catalog_pass
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: catalog-mysql
+  namespace: retail-store
+spec:
+  serviceName: catalog-mysql
+  replicas: 1
+  selector:
+    matchLabels:
+      app: catalog-mysql
+  template:
+    metadata:
+      labels:
+        app: catalog-mysql
+    spec:
+      containers:
+        - name: mysql
+          image: mysql:8.0
+          ports:
+            - containerPort: 3306
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              value: rootpass
+            - name: MYSQL_DATABASE
+              value: catalog
+            - name: MYSQL_USER
+              value: catalog_user
+            - name: MYSQL_PASSWORD
+              value: catalog_pass
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: catalog-mysql
+  namespace: retail-store
+spec:
+  selector:
+    app: catalog-mysql
+  ports:
+    - port: 3306
+  type: ClusterIP

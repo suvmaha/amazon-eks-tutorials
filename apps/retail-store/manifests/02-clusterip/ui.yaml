@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ui
+  namespace: retail-store
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ui
+  template:
+    metadata:
+      labels:
+        app: ui
+    spec:
+      containers:
+        - name: ui
+          image: public.ecr.aws/aws-containers/retail-store-sample-ui:0.8.3
+          ports:
+            - containerPort: 8080
+          env:
+            - name: RETAIL_UI_ENDPOINTS_CATALOG
+              value: http://catalog
+            - name: RETAIL_UI_ENDPOINTS_CART
+              value: http://cart
+            - name: RETAIL_UI_ENDPOINTS_CHECKOUT
+              value: http://checkout
+            - name: RETAIL_UI_ENDPOINTS_ORDERS
+              value: http://orders
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8080
+            initialDelaySeconds: 45
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8080
+            initialDelaySeconds: 30
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 512Mi
+---
+# Phase 1: ClusterIP only — accessible inside cluster, not from outside
+# Phase 4 will replace this with an Ingress + ALB
+apiVersion: v1
+kind: Service
+metadata:
+  name: ui
+  namespace: retail-store
+spec:
+  selector:
+    app: ui
+  ports:
+    - port: 80
+      targetPort: 8080
+  type: ClusterIP

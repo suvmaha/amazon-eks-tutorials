@@ -1,0 +1,91 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orders
+  namespace: retail-store
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: orders
+  template:
+    metadata:
+      labels:
+        app: orders
+    spec:
+      containers:
+        - name: orders
+          image: public.ecr.aws/aws-containers/retail-store-sample-orders:0.8.3
+          ports:
+            - containerPort: 8080
+          env:
+            - name: RETAIL_ORDERS_PERSISTENCE_PROVIDER
+              value: postgresql
+            - name: SPRING_DATASOURCE_URL
+              value: jdbc:postgresql://orders-postgresql:5432/orders
+            - name: SPRING_DATASOURCE_USERNAME
+              value: orders_user
+            - name: SPRING_DATASOURCE_PASSWORD
+              value: orders_pass
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: orders
+  namespace: retail-store
+spec:
+  selector:
+    app: orders
+  ports:
+    - port: 80
+      targetPort: 8080
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: orders-postgresql
+  namespace: retail-store
+spec:
+  serviceName: orders-postgresql
+  replicas: 1
+  selector:
+    matchLabels:
+      app: orders-postgresql
+  template:
+    metadata:
+      labels:
+        app: orders-postgresql
+    spec:
+      containers:
+        - name: postgresql
+          image: postgres:16
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: orders
+            - name: POSTGRES_USER
+              value: orders_user
+            - name: POSTGRES_PASSWORD
+              value: orders_pass
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: orders-postgresql
+  namespace: retail-store
+spec:
+  selector:
+    app: orders-postgresql
+  ports:
+    - port: 5432
+  type: ClusterIP
