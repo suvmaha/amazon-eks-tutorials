@@ -1,0 +1,42 @@
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: ${EKS_CLUSTER_NAME}
+  region: ${AWS_REGION}
+  version: "${K8S_VERSION}"
+  tags:
+    karpenter.sh/discovery: ${EKS_CLUSTER_NAME}
+
+iam:
+  withOIDC: true
+  serviceAccounts:
+    - metadata:
+        name: karpenter
+        namespace: karpenter
+      roleName: ${EKS_CLUSTER_NAME}-karpenter
+      attachPolicyARNs:
+        - arn:aws:iam::${AWS_ACCOUNT_ID}:policy/KarpenterControllerPolicy-${EKS_CLUSTER_NAME}
+      roleOnly: true
+
+# System node group — fixed size, runs Karpenter and system pods.
+# Karpenter provisions all workload nodes dynamically.
+managedNodeGroups:
+  - name: system
+    instanceType: m5.large
+    minSize: 2
+    maxSize: 2
+    desiredCapacity: 2
+    privateNetworking: true
+    labels:
+      role: system
+    taints:
+      - key: CriticalAddonsOnly
+        value: "true"
+        effect: NoSchedule
+
+addons:
+  - name: vpc-cni
+  - name: coredns
+  - name: kube-proxy
+  - name: aws-ebs-csi-driver

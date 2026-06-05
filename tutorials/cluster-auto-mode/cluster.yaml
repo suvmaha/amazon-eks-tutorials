@@ -1,0 +1,25 @@
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: ${EKS_CLUSTER_NAME}
+  region: ${AWS_REGION}
+  version: "${K8S_VERSION}"
+
+# Auto Mode — AWS manages Karpenter and the full node lifecycle.
+# No managedNodeGroups block needed. Nodes appear on demand when pods are scheduled.
+autoModeConfig:
+  enabled: true
+
+iam:
+  withOIDC: true   # still needed for IRSA / Pod Identity on workloads
+
+# Auto Mode includes these add-ons automatically:
+#   - vpc-cni (networking)
+#   - coredns (DNS)
+#   - kube-proxy (service routing)
+#   - AWS-managed Karpenter (node provisioning)
+# You can still add other add-ons (e.g. aws-efs-csi-driver) explicitly:
+addons:
+  - name: aws-ebs-csi-driver
+    useDefaultPodIdentityAssociations: true

@@ -1,0 +1,31 @@
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: ${EKS_CLUSTER_NAME}
+  region: ${AWS_REGION}
+  version: "${K8S_VERSION}"
+
+# eksctl creates the VPC — public + private subnets across 2 AZs, 1 NAT gateway.
+# For a production VPC (custom CIDR, more AZs, shared subnets) use CDK or Terraform.
+
+iam:
+  withOIDC: true   # required for IRSA — pods can assume IAM roles
+
+managedNodeGroups:
+  - name: default
+    instanceType: m5.large
+    minSize: 2
+    maxSize: 5
+    desiredCapacity: 2
+    privateNetworking: true   # nodes in private subnets, only LBs in public
+    labels:
+      role: default
+    tags:
+      cluster: ${EKS_CLUSTER_NAME}
+
+addons:
+  - name: vpc-cni             # pod networking — assigns VPC IPs to pods
+  - name: coredns             # DNS for service discovery inside the cluster
+  - name: kube-proxy          # network rules on each node (Service routing)
+  - name: aws-ebs-csi-driver  # dynamic EBS volume provisioning for PVCs
