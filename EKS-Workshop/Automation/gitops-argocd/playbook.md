@@ -3,186 +3,298 @@
 **Source:** EKS Workshop — https://www.eksworkshop.com/docs/automation/gitops/argocd  
 **Estimated time:** ~60 minutes total (cluster ~20 min + NLB ~10 min + lab ~30 min)
 
-This playbook runs the complete Argo CD lab from the EKS Workshop — in order, end to end.  
-The cluster stack is built piece by piece using shared scripts from `EKS-Workshop/cluster/` and `EKS-Workshop/addons/`.
+Execute steps in order — each step leaves the environment ready for the next.  
+All `cp` commands reference files already in this repo — no external workshop environment needed.
 
 ---
 
-## STEP 0 — Build the cluster stack
+## STEP 1 — Verify Tools
 
-This replaces what the workshop calls `prepare-environment automation/gitops/argocd`.  
+Confirm every CLI tool is installed and your AWS session is active before touching infrastructure.
+
+```bash
+aws --version              # aws-cli/2.x
+eksctl version             # 0.200+
+kubectl version --client   # v1.3x
+helm version --short       # v3.x
+argocd version --client    # v2.x
+jq --version               # jq-1.7+
+yq --version               # v4.x  (required for App of Apps step)
+curl --version             # 8.x
+
+# Confirm AWS identity
+aws sts get-caller-identity
+
+# OUTPUT
+{
+    "UserId": "AROAXXXXXXXXXXXXXXXXX:session",
+    "Account": "123456789012",
+    "Arn": "arn:aws:iam::123456789012:assumed-role/..."
+}
+```
+
+> Install argocd CLI: https://argo-cd.readthedocs.io/en/stable/cli_installation/  
+> Install yq: `brew install yq`
+
+---
+
+## STEP 2 — Clone the repo and explore the structure
+
+```bash
+git clone https://github.com/suvmaha/amazon-eks-tutorials.git
+cd amazon-eks-tutorials
+
+# Set REPO_ROOT — all paths in this playbook are relative to here
+export REPO_ROOT=$(pwd)
+
+tree EKS-Workshop/
+
+# OUTPUT
+EKS-Workshop/
+├── cluster/
+│   └── managed-node-group/
+│       ├── cluster.yaml.template   ← eksctl config (envsubst fills vars)
+│       ├── create.sh               ← creates cluster
+│       └── destroy.sh
+├── addons/
+│   ├── aws-lbc/
+│   │   ├── iam-policy.json
+│   │   ├── install.sh              ← installs AWS Load Balancer Controller
+│   │   └── uninstall.sh
+│   ├── codecommit/
+│   │   ├── setup.sh                ← Option A: CodeCommit GitOps repo
+│   │   └── teardown.sh
+│   └── github-gitops/
+│       ├── setup.sh                ← Option B: GitHub GitOps repo
+│       └── teardown.sh
+└── Automation/
+    └── gitops-argocd/
+        ├── playbook.md             ← you are here
+        ├── install/
+        │   └── values.yaml         ← ArgoCD Helm values (NLB, replicas, 5s reconcile)
+        ├── Chart.yaml              ← UI wrapper Helm chart
+        ├── update-application/
+        │   └── values.yaml         ← ui.replicaCount: 3
+        ├── app-charts/             ← per-service wrapper charts
+        │   ├── ui/Chart.yaml
+        │   ├── carts/Chart.yaml
+        │   ├── catalog/Chart.yaml
+        │   ├── checkout/Chart.yaml
+        │   └── orders/Chart.yaml
+        └── app-of-apps/            ← Helm chart generating child Application CRDs
+            ├── Chart.yaml
+            ├── values.yaml
+            └── templates/
+                ├── _application.yaml
+                └── application.yaml
+```
+
+---
+
+## STEP 3 — Build the cluster stack
+
+This is what the workshop calls `prepare-environment automation/gitops/argocd`.  
 Run each script in order. Each is independently reversible.
 
-**0a — Create the EKS cluster (managed node group, ~20 min)**
+**3a — Create the EKS cluster (~20 min)**
 
 ```bash
-# Default cluster name: eks-workshop. Override with EKS_CLUSTER_NAME=my-name
-EKS-Workshop/cluster/managed-node-group/create.sh
+${REPO_ROOT}/EKS-Workshop/cluster/managed-node-group/create.sh
+
+# OUTPUT
+── Pre-flight checks ───────────────────────────────────────────────────────
+  ✅  No existing cluster 'eks-workshop'
+  ✅  eksctl available
+  ✅  kubectl available
+  ✅  helm available
+
+╔══════════════════════════════════════════════════════════════════════╗
+║            EKS Workshop — Managed Node Group Cluster                ║
+╠══════════════════════════════════════════════════════════════════════╣
+║  Cluster name   : eks-workshop                                       ║
+║  AWS account    : 123456789012                                       ║
+║  Region         : us-east-1                                          ║
+║  Kubernetes     : 1.35                                               ║
+╠══════════════════════════════════════════════════════════════════════╣
+║  Node group     : managed-ng-1 — 3x t3.medium (min 2, max 5)        ║
+║  EBS CSI addon  : enabled (required for PVC-based workloads)         ║
+║  OIDC provider  : enabled (required for IRSA)                        ║
+║  VPC            : eksctl-managed (created with cluster)              ║
+╚══════════════════════════════════════════════════════════════════════╝
+
+Proceed with cluster creation? (y/n): y
+
+── STEP 1: Generate cluster config ─────────────────────────────────────────
+  Written: cluster.yaml
+
+── STEP 2: Create EKS cluster (~15-20 min) ─────────────────────────────────
+  ...eksctl output...
+  ✅  EKS cluster "eks-workshop" in "us-east-1" region is ready
+
+── STEP 3: Associate IAM OIDC provider ─────────────────────────────────────
+  OIDC provider associated — IRSA enabled.
+
+── STEP 4: Verify ───────────────────────────────────────────────────────────
+NAME                           STATUS   ROLES    AGE
+ip-192-168-x-x.ec2.internal   Ready    <none>   90s
+ip-192-168-x-x.ec2.internal   Ready    <none>   92s
+ip-192-168-x-x.ec2.internal   Ready    <none>   88s
+
+Cluster 'eks-workshop' is ready.
+⏱  Elapsed: 18m 32s
 ```
 
-What it creates: EKS 1.35 cluster, 3x t3.medium managed node group, EBS CSI addon, OIDC provider.  
-Override instance type: `INSTANCE_TYPE=m5.large ./create.sh`
+> Override defaults: `EKS_CLUSTER_NAME=my-cluster INSTANCE_TYPE=m5.large ./create.sh`
 
-**0b — Install AWS Load Balancer Controller**
+**3b — Install AWS Load Balancer Controller**
 
 ```bash
-# Requires the cluster from 0a to be ACTIVE
-EKS-Workshop/addons/aws-lbc/install.sh
+${REPO_ROOT}/EKS-Workshop/addons/aws-lbc/install.sh
+
+# OUTPUT
+── Pre-flight checks ───────────────────────────────────────────────────────
+  ✅  Cluster 'eks-workshop' is ACTIVE
+  ✅  OIDC provider configured
+  ✅  helm available
+
+╔══════════════════════════════════════════════════════════════════════╗
+║              Addon: AWS Load Balancer Controller                    ║
+╠══════════════════════════════════════════════════════════════════════╣
+║  Cluster        : eks-workshop                                       ║
+║  Region         : us-east-1                                          ║
+║  LBC version    : v2.8.1                                             ║
+║  IAM policy     : AWSLoadBalancerControllerIAMPolicy-eks-workshop    ║
+║  Service account: aws-load-balancer-controller (kube-system)         ║
+╚══════════════════════════════════════════════════════════════════════╝
+
+Proceed? (y/n): y
+
+── STEP 1: Create IAM policy ───────────────────────────────────────────────
+  ✅  Created: AWSLoadBalancerControllerIAMPolicy-eks-workshop
+
+── STEP 2: Create IRSA service account ─────────────────────────────────────
+  ✅  IRSA service account created.
+
+── STEP 3: Helm install AWS Load Balancer Controller ───────────────────────
+  ✅  AWS Load Balancer Controller installed.
+
+── STEP 4: Verify ───────────────────────────────────────────────────────────
+NAME                           READY   UP-TO-DATE   AVAILABLE
+aws-load-balancer-controller   2/2     2            2
+
+AWS Load Balancer Controller is ready.
+⏱  Elapsed: 87s
 ```
 
-What it creates: IAM policy, IRSA service account, Helm install of aws-load-balancer-controller.  
-Why needed: ArgoCD server service type is `LoadBalancer` → NLB provisioned by LBC.
+**3c — Set up the GitOps repository (choose one)**
 
-**0c — Set up GitOps repository (choose one)**
-
-| Option | When to use |
-|---|---|
-| CodeCommit | Exact EKS Workshop flow — IAM SSH key, no external dependency |
-| GitHub | Simpler — uses `gh` CLI, no IAM key management |
+| Option | Script | When to use |
+|---|---|---|
+| A — CodeCommit | `addons/codecommit/setup.sh` | Exact EKS Workshop flow — no external tool dependency |
+| B — GitHub | `addons/github-gitops/setup.sh` | Simpler — requires `gh` CLI authenticated |
 
 ```bash
-# Option A: CodeCommit (exact workshop)
-EKS-Workshop/addons/codecommit/setup.sh
+# Option A: CodeCommit
+${REPO_ROOT}/EKS-Workshop/addons/codecommit/setup.sh
 
-# Option B: GitHub (simpler)
-EKS-Workshop/addons/github-gitops/setup.sh
+# Option B: GitHub (requires: gh auth login)
+${REPO_ROOT}/EKS-Workshop/addons/github-gitops/setup.sh
+
+# OUTPUT (both options show this pattern at the end)
+── Done — copy and run the following before starting the playbook ──
+
+  export ARGOCD_CHART_VERSION="7.9.1"
+  export GITOPS_REPO_URL_ARGOCD="ssh://..."
+  export INBOUND_CIDRS="0.0.0.0/0"
+  export AWS_REGION="us-east-1"
+  # GitHub also adds:
+  export GIT_SSH_COMMAND="ssh -i ~/.ssh/gitops_ssh.pem -o StrictHostKeyChecking=no"
 ```
 
-Both scripts produce the same env vars. **Copy and run the export block they print:**
-
-```bash
-# CodeCommit output looks like:
-export ARGOCD_CHART_VERSION="7.9.1"
-export GITOPS_REPO_URL_ARGOCD="ssh://<key-id>@git-codecommit.<region>.amazonaws.com/v1/repos/<cluster>-argocd"
-export INBOUND_CIDRS="0.0.0.0/0"
-export AWS_REGION="us-east-1"
-
-# GitHub output also sets:
-export GIT_SSH_COMMAND="ssh -i ~/.ssh/gitops_ssh.pem -o StrictHostKeyChecking=no"
-```
-
-> `GIT_SSH_COMMAND` is required for all `git` operations in the lab when using GitHub.  
-> With CodeCommit the IAM key is picked up automatically via the SSH URL.
-
-**Verify the full stack before proceeding**
+**Copy and paste the export block from the script output, then verify the full stack:**
 
 ```bash
 kubectl get nodes
+# NAME                           STATUS   ROLES    AGE
+# ip-192-168-x-x.ec2.internal   Ready    <none>   22m   ← 3 nodes
+
 kubectl get deployment aws-load-balancer-controller -n kube-system
-kubectl get pods -n kube-system | grep ebs-csi
-echo $ARGOCD_CHART_VERSION
-echo $GITOPS_REPO_URL_ARGOCD
-```
+# NAME                           READY   UP-TO-DATE   AVAILABLE
+# aws-load-balancer-controller   2/2     2            2
 
----
-
-## Teardown order (reverse of build)
-
-When done with the lab, tear down in reverse:
-
-```bash
-# 1. ArgoCD cleanup (STEP 11 in this playbook)
-
-# 2. Remove GitOps repo (whichever you used)
-EKS-Workshop/addons/codecommit/teardown.sh    # Option A
-EKS-Workshop/addons/github-gitops/teardown.sh # Option B
-
-# 3. Remove LBC
-EKS-Workshop/addons/aws-lbc/uninstall.sh
-
-# 4. Delete cluster
-EKS-Workshop/cluster/managed-node-group/destroy.sh
-```
-
----
-
-## Before you begin (post-stack verification)
-
-Confirm the stack is ready:
-
-```bash
-# Verify AWS LBC is installed
-kubectl get deployment aws-load-balancer-controller -n kube-system
-
-# Verify EBS CSI driver is present
 kubectl get daemonset ebs-csi-node -n kube-system
+# NAME           DESIRED   CURRENT   READY
+# ebs-csi-node   3         3         3
 
-# Verify env vars are set
-echo $ARGOCD_CHART_VERSION       # should be 7.9.1
-echo $GITOPS_REPO_URL_ARGOCD     # should be ssh://...@git-codecommit...
-echo $INBOUND_CIDRS              # your CIDR or 0.0.0.0/0
+echo $ARGOCD_CHART_VERSION    # 7.9.1
+echo $GITOPS_REPO_URL_ARGOCD  # ssh://...
 ```
 
 ---
 
-## STEP 1 — Install Argo CD
-
-**Install ArgoCD 7.9.1 via Helm with a LoadBalancer service (NLB)**
+## STEP 4 — Install Argo CD
 
 ```bash
 helm repo add argo-cd https://argoproj.github.io/argo-helm
-ESCAPED_CIDRS="${INBOUND_CIDRS//,/\\,}"
-helm upgrade --install argocd argo-cd/argo-cd --version "${ARGOCD_CHART_VERSION}" \
-  --namespace "argocd" --create-namespace \
-  --values ~/environment/eks-workshop/modules/automation/gitops/argocd/values.yaml \
-  --set "server.service.annotations.service\.beta\.kubernetes\.io/load-balancer-source-ranges=$ESCAPED_CIDRS" \
-  --wait
-```
+helm repo update argo-cd
 
-> In this repo the values file is at `install/values.yaml`. Workshop participants use the path shown above.  
-> Expected output: `STATUS: deployed`
+ESCAPED_CIDRS="${INBOUND_CIDRS//,/\\,}"
+helm upgrade --install argocd argo-cd/argo-cd \
+  --version "${ARGOCD_CHART_VERSION}" \
+  --namespace "argocd" --create-namespace \
+  --values "${REPO_ROOT}/EKS-Workshop/Automation/gitops-argocd/install/values.yaml" \
+  --set "server.service.annotations.service\.beta\.kubernetes\.io/load-balancer-source-ranges=${ESCAPED_CIDRS}" \
+  --wait
+
+# OUTPUT
+NAME: argocd
+LAST DEPLOYED: ...
+NAMESPACE: argocd
+STATUS: deployed
+REVISION: 1
+```
 
 ---
 
-## STEP 2 — Get the Argo CD URL and wait for the NLB
+## STEP 5 — Wait for the NLB and log in
 
-**Retrieve the NLB hostname — the LB takes 3-5 minutes to provision**
+**Get the ArgoCD server URL — NLB takes 3-5 minutes to provision**
 
 ```bash
-export ARGOCD_SERVER=$(kubectl get svc argocd-server -n argocd -o json | jq --raw-output '.status.loadBalancer.ingress[0].hostname')
+export ARGOCD_SERVER=$(kubectl get svc argocd-server -n argocd \
+  -o json | jq --raw-output '.status.loadBalancer.ingress[0].hostname')
 echo "Argo CD URL: https://$ARGOCD_SERVER"
 ```
 
-**Wait until Argo CD responds (up to 10 minutes)**
+**Wait until ArgoCD responds (retries every 15s, up to 20 attempts)**
 
 ```bash
 curl --head -X GET --retry 20 --retry-all-errors --retry-delay 15 \
   --connect-timeout 5 --max-time 10 -k \
   https://$ARGOCD_SERVER
+
+# Final output when ready:
+# HTTP/1.1 200 OK
+# Content-Type: text/html; charset=utf-8
 ```
 
-Expected final output:
-```
-HTTP/1.1 200 OK
-Content-Type: text/html; charset=utf-8
-```
-
----
-
-## STEP 3 — Retrieve admin password and log in
-
-**Get the auto-generated admin password**
+**Get admin password and log in via CLI**
 
 ```bash
-export ARGOCD_PWD=$(kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d)
+export ARGOCD_PWD=$(kubectl -n argocd get secret argocd-initial-admin-secret \
+  -o jsonpath="{.data.password}" | base64 -d)
 echo "Argo CD admin password: $ARGOCD_PWD"
-```
 
-**Log in with the argocd CLI**
-
-```bash
 argocd login $ARGOCD_SERVER --username admin --password $ARGOCD_PWD --insecure
-```
 
-Expected output:
-```
-'admin:login' logged in successfully
-Context '...elb.amazonaws.com' updated
+# OUTPUT
+# 'admin:login' logged in successfully
+# Context '...elb.amazonaws.com' updated
 ```
 
 ---
 
-## STEP 4 — Set up the Git repository
+## STEP 6 — Set up the GitOps working directory
 
 **Configure Git identity**
 
@@ -194,96 +306,59 @@ git config --global user.name "Your Name"
 **CodeCommit only — add to SSH known hosts**
 
 ```bash
-# Skip if using GitHub (setup.sh already handled this)
-ssh-keyscan -H git-codecommit.${AWS_REGION}.amazonaws.com &> ~/.ssh/known_hosts
+# Skip this block if you chose GitHub in STEP 3c (setup.sh already handled it)
+ssh-keyscan -H git-codecommit.${AWS_REGION}.amazonaws.com >> ~/.ssh/known_hosts
 ```
 
-**Clone the repo and push an initial commit to main**
+**Register the GitOps repo with Argo CD**
 
 ```bash
-# GIT_SSH_COMMAND already set if using GitHub (from 0c export block)
+# CodeCommit — needs --insecure-ignore-host-key (CodeCommit not in ArgoCD's known_hosts)
+argocd repo add $GITOPS_REPO_URL_ARGOCD \
+  --ssh-private-key-path ${HOME}/.ssh/gitops_ssh.pem \
+  --insecure-ignore-host-key --upsert --name git-repo
+
+# GitHub — no --insecure-ignore-host-key needed
+argocd repo add $GITOPS_REPO_URL_ARGOCD \
+  --ssh-private-key-path ${HOME}/.ssh/gitops_ssh.pem \
+  --upsert --name git-repo
+
+# OUTPUT
+# Repository 'ssh://...' added
+```
+
+**Clone the GitOps repo and push the initial commit**
+
+```bash
 git clone $GITOPS_REPO_URL_ARGOCD ~/environment/argocd
 git -C ~/environment/argocd checkout -b main
 touch ~/environment/argocd/.gitkeep
 git -C ~/environment/argocd add .
 git -C ~/environment/argocd commit -am "Initial commit"
 git -C ~/environment/argocd push --set-upstream origin main
-```
 
-Expected output:
-```
-Switched to a new branch 'main'
-[main (root-commit) ...] Initial commit
-Branch 'main' set up to track remote branch 'main' from 'origin'.
-```
-
----
-
-## STEP 5 — Register the Git repo with Argo CD
-
-**Provide Argo CD with SSH access to the repo**
-
-```bash
-# CodeCommit — insecure-ignore-host-key required (CodeCommit host is not in ArgoCD's known_hosts)
-argocd repo add $GITOPS_REPO_URL_ARGOCD \
-  --ssh-private-key-path ${HOME}/.ssh/gitops_ssh.pem \
-  --insecure-ignore-host-key --upsert --name git-repo
-
-# GitHub — no --insecure-ignore-host-key needed (github.com is a well-known host)
-argocd repo add $GITOPS_REPO_URL_ARGOCD \
-  --ssh-private-key-path ${HOME}/.ssh/gitops_ssh.pem \
-  --upsert --name git-repo
-```
-
-Expected output:
-```
-Repository 'ssh://...' added
-```
-
----
-
-## STEP 6 — Remove existing sample app deployments
-
-**The workshop migrates the UI from kubectl to Argo CD — remove namespaces first**
-
-```bash
-kubectl delete namespace -l app.kubernetes.io/created-by=eks-workshop
-```
-
-Expected output:
-```
-namespace "carts" deleted
-namespace "catalog" deleted
-namespace "checkout" deleted
-namespace "orders" deleted
-namespace "other" deleted
-namespace "ui" deleted
+# OUTPUT
+# Switched to a new branch 'main'
+# [main (root-commit) abc1234] Initial commit
+# Branch 'main' set up to track remote branch 'main' from 'origin'.
 ```
 
 ---
 
 ## STEP 7 — Deploy the UI component via Argo CD
 
-**Copy the UI Helm wrapper chart to the GitOps repo**
+The workshop migrates the UI from direct kubectl to GitOps. In a fresh cluster there are no pre-existing namespaces to delete — skip that workshop step and go straight to deploying.
+
+**Copy the UI Helm wrapper chart into the GitOps repo**
 
 ```bash
 mkdir -p ~/environment/argocd/ui
-cp ~/environment/eks-workshop/modules/automation/gitops/argocd/Chart.yaml \
-  ~/environment/argocd/ui
-```
+cp ${REPO_ROOT}/EKS-Workshop/Automation/gitops-argocd/Chart.yaml \
+  ~/environment/argocd/ui/
 
-> The `Chart.yaml` wraps `retail-store-sample-ui-chart:1.2.1` from `oci://public.ecr.aws/aws-containers`
-
-**Verify the repo structure**
-
-```bash
 tree ~/environment/argocd
-```
-
-Expected:
-```
-`-- ui
-    `-- Chart.yaml
+# ui
+# └── Chart.yaml
 ```
 
 **Commit and push**
@@ -294,77 +369,64 @@ git -C ~/environment/argocd commit -am "Adding the UI service"
 git -C ~/environment/argocd push
 ```
 
-**Create the Argo CD Application (manual sync policy)**
+**Create the Argo CD Application (manual sync)**
 
 ```bash
-argocd app create ui --repo $GITOPS_REPO_URL_ARGOCD \
-  --path ui --dest-server https://kubernetes.default.svc \
-  --dest-namespace ui --sync-option CreateNamespace=true
+argocd app create ui \
+  --repo $GITOPS_REPO_URL_ARGOCD \
+  --path ui \
+  --dest-server https://kubernetes.default.svc \
+  --dest-namespace ui \
+  --sync-option CreateNamespace=true
+
+# OUTPUT: application 'ui' created
 ```
 
-Expected output:
-```
-application 'ui' created
-```
-
-**Verify the application exists (will show OutOfSync — expected)**
+**Verify it shows OutOfSync — expected before first sync**
 
 ```bash
 argocd app list
+
+# NAME         CLUSTER                         NAMESPACE  STATUS     HEALTH   SYNCPOLICY
+# argocd/ui    https://kubernetes.default.svc  ui         OutOfSync  Missing  Manual
 ```
 
-```
-NAME         CLUSTER                         NAMESPACE  PROJECT  STATUS     HEALTH   SYNCPOLICY
-argocd/ui    https://kubernetes.default.svc  ui         default  OutOfSync  Missing  Manual
-```
-
-**Manually trigger sync**
+**Manually trigger the first sync**
 
 ```bash
 argocd app sync ui
 argocd app wait ui --timeout 120
 ```
 
-**Verify the deployment**
+**Verify the UI is running**
 
 ```bash
 kubectl get deployment -n ui ui
 kubectl get pod -n ui
-```
 
-Expected:
-```
-NAME   READY   UP-TO-DATE   AVAILABLE   AGE
-ui     1/1     1            1           61s
+# NAME   READY   UP-TO-DATE   AVAILABLE   AGE
+# ui     1/1     1            1           61s
 ```
 
 ---
 
 ## STEP 8 — Update the application via GitOps
 
-**Create a values.yaml to scale UI replicas from 1 to 3**
+Demonstrate the GitOps loop: push a change → ArgoCD detects it → reconciles the cluster.
+
+**Copy the values file that scales UI from 1 → 3 replicas**
 
 ```bash
-cp ~/environment/eks-workshop/modules/automation/gitops/argocd/update-application/values.yaml \
-  ~/environment/argocd/ui
-```
+cp ${REPO_ROOT}/EKS-Workshop/Automation/gitops-argocd/update-application/values.yaml \
+  ~/environment/argocd/ui/
 
-> This file sets `ui.replicaCount: 3`
-
-**Verify the repo structure**
-
-```bash
 tree ~/environment/argocd
+# ui
+# ├── Chart.yaml
+# └── values.yaml        ← ui.replicaCount: 3
 ```
 
-Expected:
-```
-`-- ui
-    |-- Chart.yaml
-    `-- values.yaml
-```
-
-**Commit and push the change**
+**Push the change**
 
 ```bash
 git -C ~/environment/argocd add .
@@ -372,45 +434,46 @@ git -C ~/environment/argocd commit -am "Update UI service replicas"
 git -C ~/environment/argocd push
 ```
 
-**Sync the application**
+**Sync and verify**
 
 ```bash
 argocd app sync ui
 argocd app wait ui --timeout 120
-```
 
-**Verify 3 replicas are running**
-
-```bash
 kubectl get deployment -n ui ui
 kubectl get pod -n ui
-```
 
-Expected:
-```
-NAME   READY   UP-TO-DATE   AVAILABLE   AGE
-ui     3/3     3            3           3m33s
+# NAME   READY   UP-TO-DATE   AVAILABLE
+# ui     3/3     3            3
 
-NAME                  READY   STATUS    RESTARTS   AGE
-ui-6d5bb7b95-hzmgp   1/1     Running   0          61s
-ui-6d5bb7b95-j28ww   1/1     Running   0          61s
-ui-6d5bb7b95-rjfxd   1/1     Running   0          3m34s
+# NAME                  READY   STATUS    RESTARTS
+# ui-xxx-aaa           1/1     Running   0
+# ui-xxx-bbb           1/1     Running   0
+# ui-xxx-ccc           1/1     Running   0
 ```
 
 ---
 
 ## STEP 9 — Set up App of Apps
 
-**Copy the App of Apps Helm chart to the GitOps repo**
+One parent Application manages child Application CRDs for all five retail store services.
+
+**Copy the App of Apps Helm chart into the GitOps repo**
 
 ```bash
-cp -R ~/environment/eks-workshop/modules/automation/gitops/argocd/app-of-apps ~/environment/argocd/
+cp -R ${REPO_ROOT}/EKS-Workshop/Automation/gitops-argocd/app-of-apps \
+  ~/environment/argocd/
 ```
 
-**Patch the repoURL in values.yaml with the CodeCommit repo URL**
+**Patch the repoURL in values.yaml to point to your GitOps repo**
 
 ```bash
-yq -i ".spec.source.repoURL = env(GITOPS_REPO_URL_ARGOCD)" ~/environment/argocd/app-of-apps/values.yaml
+yq -i ".spec.source.repoURL = env(GITOPS_REPO_URL_ARGOCD)" \
+  ~/environment/argocd/app-of-apps/values.yaml
+
+# Verify the patch
+grep repoURL ~/environment/argocd/app-of-apps/values.yaml
+# repoURL: ssh://...
 ```
 
 **Commit and push**
@@ -421,62 +484,53 @@ git -C ~/environment/argocd commit -am "Adding App of Apps"
 git -C ~/environment/argocd push
 ```
 
-**Create the parent Argo CD Application with automated sync**
+**Create the parent Application with automated sync**
 
 ```bash
-argocd app create apps --repo $GITOPS_REPO_URL_ARGOCD \
+argocd app create apps \
+  --repo $GITOPS_REPO_URL_ARGOCD \
   --dest-server https://kubernetes.default.svc \
   --sync-policy automated --self-heal --auto-prune \
   --set-finalizer \
   --upsert \
   --path app-of-apps
+
 argocd app wait apps --timeout 120
+
+# OUTPUT: application 'apps' created
 ```
 
-Expected output:
-```
-application 'apps' created
-```
-
-> At this point in the Argo CD UI, `apps` syncs but child apps (carts, catalog, checkout, orders) show "Unknown" — their Git paths don't exist yet.
+> In the ArgoCD UI: `apps` syncs, but carts/catalog/checkout/orders show "Unknown" — their Git paths don't exist yet. That's expected.
 
 ---
 
 ## STEP 10 — Add all workload charts
 
-**Copy the per-service Helm wrapper charts to the GitOps repo**
+**Copy all five per-service wrapper charts into the GitOps repo**
 
 ```bash
-cp -R ~/environment/eks-workshop/modules/automation/gitops/argocd/app-charts/* \
+cp -R ${REPO_ROOT}/EKS-Workshop/Automation/gitops-argocd/app-charts/* \
   ~/environment/argocd/
-```
 
-**Verify the full repo structure**
-
-```bash
 tree ~/environment/argocd
-```
-
-Expected:
-```
-.
-|-- app-of-apps/
-|   |-- Chart.yaml
-|   |-- templates/
-|   |   |-- _application.yaml
-|   |   `-- application.yaml
-|   `-- values.yaml
-|-- carts/
-|   `-- Chart.yaml
-|-- catalog/
-|   `-- Chart.yaml
-|-- checkout/
-|   `-- Chart.yaml
-|-- orders/
-|   `-- Chart.yaml
-`-- ui/
-    |-- Chart.yaml
-    `-- values.yaml
+# .
+# ├── app-of-apps/
+# │   ├── Chart.yaml
+# │   ├── templates/
+# │   │   ├── _application.yaml
+# │   │   └── application.yaml
+# │   └── values.yaml
+# ├── carts/
+# │   └── Chart.yaml
+# ├── catalog/
+# │   └── Chart.yaml
+# ├── checkout/
+# │   └── Chart.yaml
+# ├── orders/
+# │   └── Chart.yaml
+# └── ui/
+#     ├── Chart.yaml
+#     └── values.yaml
 ```
 
 **Commit and push**
@@ -487,74 +541,90 @@ git -C ~/environment/argocd commit -am "Adding apps charts"
 git -C ~/environment/argocd push
 ```
 
-**Sync the parent apps Application**
+**Sync and wait for all apps**
 
 ```bash
 argocd app sync apps
 argocd app wait -l app.kubernetes.io/created-by=eks-workshop
 ```
 
-**Verify all namespaces are present**
+**Verify all namespaces and workloads**
 
 ```bash
 kubectl get namespaces
-```
 
-Expected:
-```
-NAME              STATUS   AGE
-argocd            Active   18m
-carts             Active   28s
-catalog           Active   28s
-checkout          Active   28s
-default           Active   8h
-kube-node-lease   Active   8h
-kube-public       Active   8h
-kube-system       Active   8h
-orders            Active   28s
-ui                Active   11m
-```
+# NAME              STATUS   AGE
+# argocd            Active   18m
+# carts             Active   28s
+# catalog           Active   28s
+# checkout          Active   28s
+# default           Active   8h
+# kube-node-lease   Active   8h
+# kube-public       Active   8h
+# kube-system       Active   8h
+# orders            Active   28s
+# ui                Active   11m
 
-**Spot-check one workload**
-
-```bash
 kubectl get deployment -n carts
-```
+# NAME    READY   UP-TO-DATE   AVAILABLE   AGE
+# carts   1/1     1            1           46s
 
-Expected:
-```
-NAME    READY   UP-TO-DATE   AVAILABLE   AGE
-carts   1/1     1            1           46s
+kubectl get deployment -n catalog
+kubectl get deployment -n checkout
+kubectl get deployment -n orders
 ```
 
 ---
 
-## STEP 11 — Cleanup
+## STEP 11 — Tear Down
 
-**Remove the GitOps working directory**
+Reverse order: ArgoCD apps → ArgoCD → GitOps repo → LBC → cluster.
+
+**Remove ArgoCD apps and working directory**
 
 ```bash
 rm -rf ~/environment/argocd
-```
 
-**Uninstall Argo CD**
-
-```bash
 helm uninstall argocd -n argocd
 kubectl delete namespace argocd --ignore-not-found=true
+kubectl delete namespace -l app.kubernetes.io/created-by=eks-workshop
+
+# OUTPUT
+# namespace "carts" deleted
+# namespace "catalog" deleted
+# namespace "checkout" deleted
+# namespace "orders" deleted
+# namespace "ui" deleted
 ```
 
-**Delete all app namespaces created by this lab**
+**Remove the GitOps repository**
 
 ```bash
-kubectl delete namespace -l app.kubernetes.io/created-by=eks-workshop
+# Option A — CodeCommit
+${REPO_ROOT}/EKS-Workshop/addons/codecommit/teardown.sh
+
+# Option B — GitHub
+${REPO_ROOT}/EKS-Workshop/addons/github-gitops/teardown.sh
 ```
 
-Expected:
+**Remove AWS Load Balancer Controller**
+
+```bash
+${REPO_ROOT}/EKS-Workshop/addons/aws-lbc/uninstall.sh
 ```
-namespace "carts" deleted
-namespace "catalog" deleted
-namespace "checkout" deleted
-namespace "orders" deleted
-namespace "ui" deleted
+
+**Delete the cluster**
+
+```bash
+${REPO_ROOT}/EKS-Workshop/cluster/managed-node-group/destroy.sh
+
+# OUTPUT
+── STEP 1: Delete EKS cluster with eksctl (~10-15 min) ─────────────────────
+  Cluster deleted.
+
+── Final check ─────────────────────────────────────────────────────────────
+  ✅  EKS cluster deleted
+  ✅  eksctl CloudFormation stack deleted
+
+⏱  Elapsed: 12m 4s
 ```
