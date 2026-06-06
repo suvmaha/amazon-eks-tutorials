@@ -15,7 +15,7 @@ Confirm every CLI tool is installed and your AWS session is active before touchi
 ```bash
 aws --version              # aws-cli/2.x
 eksctl version             # 0.200+
-kubectl version --client   # v1.3x
+kubectl version --client   # v1.3x (--short removed in 1.28+)
 helm version --short       # v3.x
 argocd version --client    # v2.x
 jq --version               # jq-1.7+
