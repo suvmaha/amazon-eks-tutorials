@@ -293,6 +293,17 @@ argocd login $ARGOCD_SERVER --username admin --password $ARGOCD_PWD --insecure
 # Context '...elb.amazonaws.com' updated
 ```
 
+**Open the ArgoCD UI in your browser**
+
+```bash
+echo "https://$ARGOCD_SERVER"
+# Open that URL — login: admin / $ARGOCD_PWD
+# Chrome cert warning: click "Advanced" → "Proceed to ... (unsafe)"
+# If "Advanced" doesn't appear: click anywhere on the page and type "thisisunsafe" (no input box — just type it)
+```
+
+> The UI shows all Applications, their sync status, health, and a live resource graph. Keep it open as you work through STEP 7-10 — you'll see apps appear and turn green in real time.
+
 ---
 
 ## STEP 6 — Set up the GitOps working directory
@@ -415,7 +426,16 @@ kubectl get pod -n ui
 
 ## STEP 8 — Update the application via GitOps
 
-Demonstrate the GitOps loop: push a change → ArgoCD detects it → reconciles the cluster.
+**What's happening:** This is the core GitOps loop in action.
+
+1. You push a config change to git (values.yaml with `replicaCount: 3`)
+2. ArgoCD's repo-server polls git every 5s (set in `timeout.reconciliation`) and detects the diff
+3. The Application moves to `OutOfSync` — desired state (git) no longer matches live state (cluster)
+4. You trigger `argocd app sync ui` — ArgoCD applies the diff: it patches the Deployment's `replicas` field from 1 → 3
+5. Kubernetes schedules 2 new pods alongside the existing one — **the original pod is NOT restarted**, it stays running
+6. Application moves back to `Synced / Healthy` once all 3 pods pass readiness checks
+
+If you were watching the UI during the sync, the retail store stayed up the whole time — the existing pod kept serving traffic while the 2 new pods came up. That's a rolling update with zero downtime.
 
 **Copy the values file that scales UI from 1 → 3 replicas**
 
@@ -504,6 +524,8 @@ argocd app wait apps --timeout 120
 ```
 
 > In the ArgoCD UI: `apps` syncs, but carts/catalog/checkout/orders show "Unknown" — their Git paths don't exist yet. That's expected.
+>
+> The `ui` app will show a warning: *"missing kubectl.kubernetes.io/last-applied-configuration annotation"* — harmless. It was created imperatively via `argocd app create` and the App of Apps is now taking over declarative ownership. ArgoCD auto-patches it on the next sync.
 
 ---
 
@@ -544,10 +566,17 @@ git -C ~/environment/argocd commit -am "Adding apps charts"
 git -C ~/environment/argocd push
 ```
 
-**Sync and wait for all apps**
+**Watch the auto-sync in action**
+
+No manual sync needed — the child apps (carts, catalog, checkout, orders, ui) all have automated sync
+watching their own git paths. Within ~5s of the push, ArgoCD detects the new Chart.yaml files and
+reconciles each app automatically.
 
 ```bash
-argocd app sync apps
+# Watch apps go Synced on their own (Ctrl+C when all Healthy)
+argocd app list --watch
+
+# Or wait for all workshop apps to reach Healthy
 argocd app wait -l app.kubernetes.io/created-by=eks-workshop
 ```
 
