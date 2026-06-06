@@ -618,6 +618,13 @@ Reverse order: ArgoCD apps → ArgoCD → GitOps repo → LBC → cluster.
 rm -rf ~/environment/argocd
 
 helm uninstall argocd -n argocd
+
+# ArgoCD sets finalizers on Application resources — force them off before deleting the namespace
+for app in apps carts catalog checkout orders ui; do
+  kubectl patch application $app -n argocd \
+    -p '{"metadata":{"finalizers":[]}}' --type=merge 2>/dev/null || true
+done
+
 kubectl delete namespace argocd --ignore-not-found=true
 kubectl delete namespace -l app.kubernetes.io/created-by=eks-workshop
 
