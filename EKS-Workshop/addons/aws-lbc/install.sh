@@ -59,6 +59,7 @@ read -r -p "Proceed? (y/n): " confirm
 [[ "${confirm}" != "y" ]] && echo "Aborted." && exit 0
 
 START=$(date +%s)
+START_LABEL=$(date '+%H:%M:%S')
 
 echo ""
 echo "── STEP 1: Create IAM policy ───────────────────────────────────────────────"
@@ -109,6 +110,12 @@ echo ""
 kubectl get pods -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller
 
 END=$(date +%s)
+ELAPSED=$(( END - START ))
+MIN=$(( ELAPSED / 60 ))
+SEC=$(( ELAPSED % 60 ))
+
 echo ""
 echo "AWS Load Balancer Controller is ready."
-echo "⏱  Elapsed: $(( END - START ))s"
+echo "⏱  Started : ${START_LABEL}"
+echo "⏱  Finished: $(date '+%H:%M:%S')"
+echo "⏱  Elapsed : ${MIN}m ${SEC}s"

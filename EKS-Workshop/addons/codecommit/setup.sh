@@ -51,6 +51,9 @@ echo ""
 read -r -p "Proceed? (y/n): " confirm
 [[ "${confirm}" != "y" ]] && echo "Aborted." && exit 0
 
+START=$(date +%s)
+START_LABEL=$(date '+%H:%M:%S')
+
 echo ""
 echo "── STEP 1: Create CodeCommit repository ────────────────────────────────────"
 if aws codecommit get-repository --repository-name "${REPO_NAME}" \
@@ -107,6 +110,11 @@ echo "── STEP 5: Build GitOps repo SSH URL ───────────
 GITOPS_REPO_URL="ssh://${SSH_KEY_ID}@git-codecommit.${AWS_REGION}.amazonaws.com/v1/repos/${REPO_NAME}"
 echo "  ✅  URL: ${GITOPS_REPO_URL}"
 
+END=$(date +%s)
+ELAPSED=$(( END - START ))
+MIN=$(( ELAPSED / 60 ))
+SEC=$(( ELAPSED % 60 ))
+
 echo ""
 echo "── Done — copy and run the following exports before starting the playbook ──"
 echo ""
@@ -117,3 +125,7 @@ echo "  export AWS_REGION=\"${AWS_REGION}\""
 echo ""
 echo "Then verify with:"
 echo "  ssh -i ${SSH_KEY_PATH} ${SSH_KEY_ID}@git-codecommit.${AWS_REGION}.amazonaws.com"
+echo ""
+echo "⏱  Started : ${START_LABEL}"
+echo "⏱  Finished: $(date '+%H:%M:%S')"
+echo "⏱  Elapsed : ${MIN}m ${SEC}s"

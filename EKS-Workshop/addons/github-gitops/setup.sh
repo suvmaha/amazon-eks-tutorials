@@ -58,6 +58,9 @@ echo ""
 read -r -p "Proceed? (y/n): " confirm
 [[ "${confirm}" != "y" ]] && echo "Aborted." && exit 0
 
+START=$(date +%s)
+START_LABEL=$(date '+%H:%M:%S')
+
 echo ""
 echo "── STEP 1: Create private GitHub repository ────────────────────────────────"
 if gh repo view "${GH_USER}/${REPO_NAME}" &>/dev/null; then
@@ -102,6 +105,11 @@ echo "── STEP 4: Add github.com to SSH known hosts ────────�
 ssh-keyscan -H github.com >> "${HOME}/.ssh/known_hosts" 2>/dev/null
 echo "  ✅  github.com added to known_hosts."
 
+END=$(date +%s)
+ELAPSED=$(( END - START ))
+MIN=$(( ELAPSED / 60 ))
+SEC=$(( ELAPSED % 60 ))
+
 echo ""
 echo "── Done — copy and run the following before starting the playbook ──────────"
 echo ""
@@ -114,3 +122,7 @@ echo ""
 echo "Verify SSH access:"
 echo "  ssh -i ${SSH_KEY_PATH} -T git@github.com"
 echo "  # Expected: Hi ${GH_USER}! You've successfully authenticated..."
+echo ""
+echo "⏱  Started : ${START_LABEL}"
+echo "⏱  Finished: $(date '+%H:%M:%S')"
+echo "⏱  Elapsed : ${MIN}m ${SEC}s"
