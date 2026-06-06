@@ -1,7 +1,7 @@
 # Playbook — GitOps with Argo CD
 
 **Source:** EKS Workshop — https://www.eksworkshop.com/docs/automation/gitops/argocd  
-**Estimated time:** ~60 minutes total (cluster ~20 min + NLB ~10 min + lab ~30 min)
+**Estimated time:** ~70 minutes total (cluster ~30 min + NLB ~10 min + lab ~30 min)
 
 Execute steps in order — each step leaves the environment ready for the next.  
 All `cp` commands reference files already in this repo — no external workshop environment needed.
@@ -96,7 +96,7 @@ EKS-Workshop/
 This is what the workshop calls `prepare-environment automation/gitops/argocd`.  
 Run each script in order. Each is independently reversible.
 
-**3a — Create the EKS cluster (~20 min)**
+**3a — Create the EKS cluster (~30 min)**
 
 ```bash
 ${REPO_ROOT}/EKS-Workshop/cluster/managed-node-group/create.sh
