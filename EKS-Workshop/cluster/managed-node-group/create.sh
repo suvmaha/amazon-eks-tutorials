@@ -20,6 +20,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export EKS_CLUSTER_NAME="${EKS_CLUSTER_NAME:-eks-workshop}"
 export AWS_REGION="${AWS_REGION:-us-east-1}"
 export K8S_VERSION="${K8S_VERSION:-1.35}"
+export INSTANCE_TYPE="${INSTANCE_TYPE:-t3.medium}"
 export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --output text --query 'Account')
 
 # ── Pre-flight ─────────────────────────────────────────────────────────────────
@@ -51,7 +52,7 @@ printf "║  AWS account    : %-50s║\n" "${AWS_ACCOUNT_ID}"
 printf "║  Region         : %-50s║\n" "${AWS_REGION}"
 printf "║  Kubernetes     : %-50s║\n" "${K8S_VERSION}"
 echo "╠══════════════════════════════════════════════════════════════════════╣"
-printf "║  Node group     : %-50s║\n" "managed-ng-1 — 3x m5.large (min 2, max 5)"
+printf "║  Node group     : %-50s║\n" "managed-ng-1 — 3x ${INSTANCE_TYPE} (min 2, max 5)"
 printf "║  EBS CSI addon  : %-50s║\n" "enabled (required for PVC-based workloads)"
 printf "║  OIDC provider  : %-50s║\n" "enabled (required for IRSA)"
 printf "║  VPC            : %-50s║\n" "eksctl-managed (created with cluster)"

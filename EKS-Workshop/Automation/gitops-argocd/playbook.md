@@ -20,7 +20,8 @@ Run each script in order. Each is independently reversible.
 EKS-Workshop/cluster/managed-node-group/create.sh
 ```
 
-What it creates: EKS 1.35 cluster, 3x m5.large managed node group, EBS CSI addon, OIDC provider.
+What it creates: EKS 1.35 cluster, 3x t3.medium managed node group, EBS CSI addon, OIDC provider.  
+Override instance type: `INSTANCE_TYPE=m5.large ./create.sh`
 
 **0b — Install AWS Load Balancer Controller**
 
@@ -32,36 +33,43 @@ EKS-Workshop/addons/aws-lbc/install.sh
 What it creates: IAM policy, IRSA service account, Helm install of aws-load-balancer-controller.  
 Why needed: ArgoCD server service type is `LoadBalancer` → NLB provisioned by LBC.
 
-**0c — Set up CodeCommit GitOps repository**
+**0c — Set up GitOps repository (choose one)**
+
+| Option | When to use |
+|---|---|
+| CodeCommit | Exact EKS Workshop flow — IAM SSH key, no external dependency |
+| GitHub | Simpler — uses `gh` CLI, no IAM key management |
 
 ```bash
+# Option A: CodeCommit (exact workshop)
 EKS-Workshop/addons/codecommit/setup.sh
+
+# Option B: GitHub (simpler)
+EKS-Workshop/addons/github-gitops/setup.sh
 ```
 
-What it creates: CodeCommit repo `<cluster-name>-argocd`, RSA SSH key pair, uploads public key to IAM, writes private key to `~/.ssh/gitops_ssh.pem`.
-
-At the end the script prints env vars — **copy and run the export block** before continuing:
+Both scripts produce the same env vars. **Copy and run the export block they print:**
 
 ```bash
+# CodeCommit output looks like:
 export ARGOCD_CHART_VERSION="7.9.1"
-export GITOPS_REPO_URL_ARGOCD="ssh://<key-id>@git-codecommit.<region>.amazonaws.com/v1/repos/<cluster-name>-argocd"
+export GITOPS_REPO_URL_ARGOCD="ssh://<key-id>@git-codecommit.<region>.amazonaws.com/v1/repos/<cluster>-argocd"
 export INBOUND_CIDRS="0.0.0.0/0"
 export AWS_REGION="us-east-1"
+
+# GitHub output also sets:
+export GIT_SSH_COMMAND="ssh -i ~/.ssh/gitops_ssh.pem -o StrictHostKeyChecking=no"
 ```
+
+> `GIT_SSH_COMMAND` is required for all `git` operations in the lab when using GitHub.  
+> With CodeCommit the IAM key is picked up automatically via the SSH URL.
 
 **Verify the full stack before proceeding**
 
 ```bash
-# Cluster active
 kubectl get nodes
-
-# LBC running
 kubectl get deployment aws-load-balancer-controller -n kube-system
-
-# EBS CSI running
 kubectl get pods -n kube-system | grep ebs-csi
-
-# Env vars set
 echo $ARGOCD_CHART_VERSION
 echo $GITOPS_REPO_URL_ARGOCD
 ```
@@ -74,8 +82,10 @@ When done with the lab, tear down in reverse:
 
 ```bash
 # 1. ArgoCD cleanup (STEP 11 in this playbook)
-# 2. Remove CodeCommit
-EKS-Workshop/addons/codecommit/teardown.sh
+
+# 2. Remove GitOps repo (whichever you used)
+EKS-Workshop/addons/codecommit/teardown.sh    # Option A
+EKS-Workshop/addons/github-gitops/teardown.sh # Option B
 
 # 3. Remove LBC
 EKS-Workshop/addons/aws-lbc/uninstall.sh
@@ -172,13 +182,7 @@ Context '...elb.amazonaws.com' updated
 
 ---
 
-## STEP 4 — Set up the CodeCommit Git repository
-
-**Add CodeCommit to known hosts to suppress SSH warnings**
-
-```bash
-ssh-keyscan -H git-codecommit.${AWS_REGION}.amazonaws.com &> ~/.ssh/known_hosts
-```
+## STEP 4 — Set up the Git repository
 
 **Configure Git identity**
 
@@ -187,9 +191,17 @@ git config --global user.email "you@eksworkshop.com"
 git config --global user.name "Your Name"
 ```
 
-**Clone the CodeCommit repo and push an initial commit to main**
+**CodeCommit only — add to SSH known hosts**
 
 ```bash
+# Skip if using GitHub (setup.sh already handled this)
+ssh-keyscan -H git-codecommit.${AWS_REGION}.amazonaws.com &> ~/.ssh/known_hosts
+```
+
+**Clone the repo and push an initial commit to main**
+
+```bash
+# GIT_SSH_COMMAND already set if using GitHub (from 0c export block)
 git clone $GITOPS_REPO_URL_ARGOCD ~/environment/argocd
 git -C ~/environment/argocd checkout -b main
 touch ~/environment/argocd/.gitkeep
@@ -209,12 +221,18 @@ Branch 'main' set up to track remote branch 'main' from 'origin'.
 
 ## STEP 5 — Register the Git repo with Argo CD
 
-**Provide Argo CD with SSH access to the CodeCommit repo**
+**Provide Argo CD with SSH access to the repo**
 
 ```bash
+# CodeCommit — insecure-ignore-host-key required (CodeCommit host is not in ArgoCD's known_hosts)
 argocd repo add $GITOPS_REPO_URL_ARGOCD \
   --ssh-private-key-path ${HOME}/.ssh/gitops_ssh.pem \
   --insecure-ignore-host-key --upsert --name git-repo
+
+# GitHub — no --insecure-ignore-host-key needed (github.com is a well-known host)
+argocd repo add $GITOPS_REPO_URL_ARGOCD \
+  --ssh-private-key-path ${HOME}/.ssh/gitops_ssh.pem \
+  --upsert --name git-repo
 ```
 
 Expected output:

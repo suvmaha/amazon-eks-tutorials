@@ -17,7 +17,7 @@ addons:
 
 managedNodeGroups:
   - name: managed-ng-1
-    instanceType: m5.large
+    instanceType: ${INSTANCE_TYPE}
     desiredCapacity: 3
     minSize: 2
     maxSize: 5
