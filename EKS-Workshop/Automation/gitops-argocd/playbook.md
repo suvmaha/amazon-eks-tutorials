@@ -96,7 +96,20 @@ EKS-Workshop/
 This is what the workshop calls `prepare-environment automation/gitops/argocd`.  
 Run each script in order. Each is independently reversible.
 
+**Choose your cluster type before starting:**
+
+| Option | Script | LBC needed? | Notes |
+|---|---|---|---|
+| A — Managed Node Group | `cluster/managed-node-group/create.sh` | Yes (STEP 3b) | Explicit nodes, exact workshop path |
+| B — Auto Mode | `cluster/auto-mode/create.sh` | **No** (skip 3b) | AWS-managed compute, LBC built-in |
+
+> Both options produce an identical env for STEP 4 onward. Auto Mode is simpler — fewer moving parts, but nodes only appear when workloads are scheduled so `kubectl get nodes` returns empty until STEP 4.
+
+---
+
 **3a — Create the EKS cluster (~30 min)**
+
+**Option A — Managed Node Group**
 
 ```bash
 ${REPO_ROOT}/EKS-Workshop/cluster/managed-node-group/create.sh
@@ -146,7 +159,32 @@ Cluster 'eks-workshop' is ready.
 
 > Override defaults: `EKS_CLUSTER_NAME=my-cluster INSTANCE_TYPE=m5.large ./create.sh`
 
-**3b — Install AWS Load Balancer Controller**
+**Option B — Auto Mode (~15 min)**
+
+```bash
+${REPO_ROOT}/EKS-Workshop/cluster/auto-mode/create.sh
+
+# OUTPUT
+╔══════════════════════════════════════════════════════════════════════╗
+║               EKS Workshop — Auto Mode Cluster                      ║
+╠══════════════════════════════════════════════════════════════════════╣
+║  Cluster name   : eks-workshop                                       ║
+║  Region         : us-east-1                                          ║
+║  Kubernetes     : 1.35                                               ║
+╠══════════════════════════════════════════════════════════════════════╣
+║  Compute        : EKS Auto Mode (AWS-managed, no node groups)        ║
+║  Load balancer  : Built-in (skip STEP 3b)                            ║
+║  EBS storage    : Built-in                                            ║
+╚══════════════════════════════════════════════════════════════════════╝
+
+# NOTE: kubectl get nodes returns empty until workloads are scheduled — that's normal.
+```
+
+> If you chose Auto Mode, **skip STEP 3b entirely** and go straight to 3c.
+
+---
+
+**3b — Install AWS Load Balancer Controller (Managed Node Group only — skip for Auto Mode)**
 
 ```bash
 ${REPO_ROOT}/EKS-Workshop/addons/aws-lbc/install.sh
@@ -646,16 +684,20 @@ ${REPO_ROOT}/EKS-Workshop/addons/codecommit/teardown.sh
 ${REPO_ROOT}/EKS-Workshop/addons/github-gitops/teardown.sh
 ```
 
-**Remove AWS Load Balancer Controller**
+**Remove AWS Load Balancer Controller (Managed Node Group only — skip for Auto Mode)**
 
 ```bash
 ${REPO_ROOT}/EKS-Workshop/addons/aws-lbc/uninstall.sh
 ```
 
-**Delete the cluster**
+**Delete the cluster (match whichever you created in STEP 3a)**
 
 ```bash
+# Option A — Managed Node Group
 ${REPO_ROOT}/EKS-Workshop/cluster/managed-node-group/destroy.sh
+
+# Option B — Auto Mode
+${REPO_ROOT}/EKS-Workshop/cluster/auto-mode/destroy.sh
 
 # OUTPUT
 ── STEP 1: Delete EKS cluster with eksctl (~10-15 min) ─────────────────────
