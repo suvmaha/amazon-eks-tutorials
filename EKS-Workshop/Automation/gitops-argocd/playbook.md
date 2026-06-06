@@ -311,6 +311,24 @@ git config --global user.name "Your Name"
 ssh-keyscan -H git-codecommit.${AWS_REGION}.amazonaws.com >> ~/.ssh/known_hosts
 ```
 
+**Clone the GitOps repo and push the initial commit**
+
+> ArgoCD requires at least one commit before it can verify repo connectivity — clone and push first.
+
+```bash
+git clone $GITOPS_REPO_URL_ARGOCD ~/environment/argocd
+git -C ~/environment/argocd checkout -b main
+touch ~/environment/argocd/.gitkeep
+git -C ~/environment/argocd add .
+git -C ~/environment/argocd commit -am "Initial commit"
+git -C ~/environment/argocd push --set-upstream origin main
+
+# OUTPUT
+# Switched to a new branch 'main'
+# [main (root-commit) abc1234] Initial commit
+# Branch 'main' set up to track remote branch 'main' from 'origin'.
+```
+
 **Register the GitOps repo with Argo CD**
 
 ```bash
@@ -326,22 +344,6 @@ argocd repo add $GITOPS_REPO_URL_ARGOCD \
 
 # OUTPUT
 # Repository 'ssh://...' added
-```
-
-**Clone the GitOps repo and push the initial commit**
-
-```bash
-git clone $GITOPS_REPO_URL_ARGOCD ~/environment/argocd
-git -C ~/environment/argocd checkout -b main
-touch ~/environment/argocd/.gitkeep
-git -C ~/environment/argocd add .
-git -C ~/environment/argocd commit -am "Initial commit"
-git -C ~/environment/argocd push --set-upstream origin main
-
-# OUTPUT
-# Switched to a new branch 'main'
-# [main (root-commit) abc1234] Initial commit
-# Branch 'main' set up to track remote branch 'main' from 'origin'.
 ```
 
 ---
