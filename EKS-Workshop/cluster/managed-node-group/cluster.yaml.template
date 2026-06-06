@@ -21,7 +21,7 @@ managedNodeGroups:
     desiredCapacity: 3
     minSize: 2
     maxSize: 5
-    amiFamily: AmazonLinux2
+    amiFamily: AmazonLinux2023
     labels:
       role: worker
     tags:
