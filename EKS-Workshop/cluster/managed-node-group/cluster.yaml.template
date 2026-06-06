@@ -6,6 +6,9 @@ metadata:
   region: ${AWS_REGION}
   version: "${K8S_VERSION}"
 
+autoModeConfig:
+  enabled: false
+
 iam:
   withOIDC: true
 
