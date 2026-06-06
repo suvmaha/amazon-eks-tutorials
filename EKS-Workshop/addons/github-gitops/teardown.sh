@@ -9,6 +9,12 @@ SSH_KEY_PATH="${HOME}/.ssh/gitops_ssh.pem"
 GH_USER=$(gh api user --jq .login)
 REPO_NAME="${EKS_CLUSTER_NAME}-argocd"
 
+# Ensure delete_repo scope is granted
+if ! gh auth status 2>&1 | grep -q "delete_repo"; then
+    echo "  gh needs 'delete_repo' scope — requesting now..."
+    gh auth refresh -h github.com -s delete_repo
+fi
+
 echo ""
 echo "── Remove: GitHub GitOps Repository ────────────────────────────────────────"
 printf "   Repo: %s/%s\n" "${GH_USER}" "${REPO_NAME}"

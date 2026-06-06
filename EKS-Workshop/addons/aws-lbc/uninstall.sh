@@ -44,6 +44,13 @@ fi
 echo ""
 echo "── STEP 3: Delete IAM policy ───────────────────────────────────────────────"
 if aws iam get-policy --policy-arn "${POLICY_ARN}" &>/dev/null; then
+    # Delete all non-default versions first (required when multiple versions exist)
+    NON_DEFAULT_VERSIONS=$(aws iam list-policy-versions --policy-arn "${POLICY_ARN}" \
+        --query 'Versions[?IsDefaultVersion==`false`].VersionId' --output text)
+    for vid in ${NON_DEFAULT_VERSIONS}; do
+        aws iam delete-policy-version --policy-arn "${POLICY_ARN}" --version-id "${vid}"
+        echo "  Deleted policy version: ${vid}"
+    done
     aws iam delete-policy --policy-arn "${POLICY_ARN}"
     echo "  ✅  IAM policy deleted: ${POLICY_NAME}"
 else
