@@ -203,7 +203,7 @@ ${REPO_ROOT}/EKS-Workshop/addons/github-gitops/setup.sh
 # OUTPUT (both options show this pattern at the end)
 ── Done — copy and run the following before starting the playbook ──
 
-  export ARGOCD_CHART_VERSION="7.9.1"
+  export ARGOCD_CHART_VERSION="9.5.19"
   export GITOPS_REPO_URL_ARGOCD="ssh://..."
   export INBOUND_CIDRS="0.0.0.0/0"
   export AWS_REGION="us-east-1"
@@ -244,6 +244,7 @@ helm upgrade --install argocd argo-cd/argo-cd \
   --namespace "argocd" --create-namespace \
   --values "${REPO_ROOT}/EKS-Workshop/Automation/gitops-argocd/install/values.yaml" \
   --set "server.service.annotations.service\.beta\.kubernetes\.io/load-balancer-source-ranges=${ESCAPED_CIDRS}" \
+  --timeout 15m \
   --wait
 
 # OUTPUT
