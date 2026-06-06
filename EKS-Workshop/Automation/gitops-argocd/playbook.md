@@ -1,15 +1,94 @@
 # Playbook — GitOps with Argo CD
 
 **Source:** EKS Workshop — https://www.eksworkshop.com/docs/automation/gitops/argocd  
-**Estimated time:** ~45 minutes (NLB provisioning adds 5-10 min)
+**Estimated time:** ~60 minutes total (cluster ~20 min + NLB ~10 min + lab ~30 min)
 
-This playbook runs the complete Argo CD lab from the EKS Workshop — in order, end to end.
+This playbook runs the complete Argo CD lab from the EKS Workshop — in order, end to end.  
+The cluster stack is built piece by piece using shared scripts from `EKS-Workshop/cluster/` and `EKS-Workshop/addons/`.
 
 ---
 
-## Before you begin
+## STEP 0 — Build the cluster stack
 
-Confirm the prerequisites from README.md are complete:
+This replaces what the workshop calls `prepare-environment automation/gitops/argocd`.  
+Run each script in order. Each is independently reversible.
+
+**0a — Create the EKS cluster (managed node group, ~20 min)**
+
+```bash
+# Default cluster name: eks-workshop. Override with EKS_CLUSTER_NAME=my-name
+EKS-Workshop/cluster/managed-node-group/create.sh
+```
+
+What it creates: EKS 1.35 cluster, 3x m5.large managed node group, EBS CSI addon, OIDC provider.
+
+**0b — Install AWS Load Balancer Controller**
+
+```bash
+# Requires the cluster from 0a to be ACTIVE
+EKS-Workshop/addons/aws-lbc/install.sh
+```
+
+What it creates: IAM policy, IRSA service account, Helm install of aws-load-balancer-controller.  
+Why needed: ArgoCD server service type is `LoadBalancer` → NLB provisioned by LBC.
+
+**0c — Set up CodeCommit GitOps repository**
+
+```bash
+EKS-Workshop/addons/codecommit/setup.sh
+```
+
+What it creates: CodeCommit repo `<cluster-name>-argocd`, RSA SSH key pair, uploads public key to IAM, writes private key to `~/.ssh/gitops_ssh.pem`.
+
+At the end the script prints env vars — **copy and run the export block** before continuing:
+
+```bash
+export ARGOCD_CHART_VERSION="7.9.1"
+export GITOPS_REPO_URL_ARGOCD="ssh://<key-id>@git-codecommit.<region>.amazonaws.com/v1/repos/<cluster-name>-argocd"
+export INBOUND_CIDRS="0.0.0.0/0"
+export AWS_REGION="us-east-1"
+```
+
+**Verify the full stack before proceeding**
+
+```bash
+# Cluster active
+kubectl get nodes
+
+# LBC running
+kubectl get deployment aws-load-balancer-controller -n kube-system
+
+# EBS CSI running
+kubectl get pods -n kube-system | grep ebs-csi
+
+# Env vars set
+echo $ARGOCD_CHART_VERSION
+echo $GITOPS_REPO_URL_ARGOCD
+```
+
+---
+
+## Teardown order (reverse of build)
+
+When done with the lab, tear down in reverse:
+
+```bash
+# 1. ArgoCD cleanup (STEP 11 in this playbook)
+# 2. Remove CodeCommit
+EKS-Workshop/addons/codecommit/teardown.sh
+
+# 3. Remove LBC
+EKS-Workshop/addons/aws-lbc/uninstall.sh
+
+# 4. Delete cluster
+EKS-Workshop/cluster/managed-node-group/destroy.sh
+```
+
+---
+
+## Before you begin (post-stack verification)
+
+Confirm the stack is ready:
 
 ```bash
 # Verify AWS LBC is installed
