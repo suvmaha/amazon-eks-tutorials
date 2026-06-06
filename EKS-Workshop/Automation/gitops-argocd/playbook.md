@@ -191,7 +191,7 @@ AWS Load Balancer Controller is ready.
 | Option | Script | When to use |
 |---|---|---|
 | A — CodeCommit | `addons/codecommit/setup.sh` | Exact EKS Workshop flow — no external tool dependency |
-| B — GitHub | `addons/github-gitops/setup.sh` | Simpler — requires `gh` CLI authenticated |
+| B — GitHub | `addons/github-gitops/setup.sh` | Simpler — requires `gh` CLI authenticated (`brew install gh && gh auth login`) |
 
 ```bash
 # Option A: CodeCommit

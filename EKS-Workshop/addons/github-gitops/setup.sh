@@ -27,13 +27,15 @@ echo ""
 echo "── Pre-flight checks ───────────────────────────────────────────────────────"
 PREFLIGHT_FAIL=false
 
-command -v gh &>/dev/null && echo "  ✅  gh CLI available" || { echo "  ❌  gh not found — install: https://cli.github.com"; PREFLIGHT_FAIL=true; }
-
-if command -v gh &>/dev/null; then
-    gh auth status &>/dev/null \
-        && echo "  ✅  gh authenticated" \
-        || { echo "  ❌  gh not authenticated — run: gh auth login"; PREFLIGHT_FAIL=true; }
+if ! command -v gh &>/dev/null; then
+    echo "  gh CLI not found — installing via Homebrew..."
+    brew install gh
 fi
+echo "  ✅  gh CLI available"
+
+gh auth status &>/dev/null \
+    && echo "  ✅  gh authenticated" \
+    || { echo "  ❌  gh not authenticated — running: gh auth login"; gh auth login; }
 
 command -v ssh-keygen &>/dev/null  && echo "  ✅  ssh-keygen available"  || { echo "  ❌  ssh-keygen not found"; PREFLIGHT_FAIL=true; }
 command -v ssh-keyscan &>/dev/null && echo "  ✅  ssh-keyscan available" || { echo "  ❌  ssh-keyscan not found"; PREFLIGHT_FAIL=true; }
