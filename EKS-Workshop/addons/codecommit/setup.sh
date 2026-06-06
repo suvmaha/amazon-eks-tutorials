@@ -18,7 +18,7 @@ set -euo pipefail
 export EKS_CLUSTER_NAME="${EKS_CLUSTER_NAME:-eks-workshop}"
 export AWS_REGION="${AWS_REGION:-us-east-1}"
 export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --output text --query 'Account')
-export ARGOCD_CHART_VERSION="${ARGOCD_CHART_VERSION:-7.9.1}"
+export ARGOCD_CHART_VERSION="${ARGOCD_CHART_VERSION:-9.5.19}"
 
 REPO_NAME="${EKS_CLUSTER_NAME}-argocd"
 SSH_KEY_PATH="${HOME}/.ssh/gitops_ssh.pem"
