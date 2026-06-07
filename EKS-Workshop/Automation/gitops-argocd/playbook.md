@@ -786,7 +786,7 @@ reconciles each app automatically.
 
 ```bash
 # Watch apps go Synced on their own (Ctrl+C when all Healthy)
-argocd app list --watch
+watch argocd app list
 
 # Or wait for all workshop apps to reach Healthy
 argocd app wait -l app.kubernetes.io/created-by=eks-workshop
