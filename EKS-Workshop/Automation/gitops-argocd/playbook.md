@@ -283,6 +283,10 @@ ${REPO_ROOT}/EKS-Workshop/addons/github-gitops/setup.sh
   export GIT_SSH_COMMAND="ssh -i ~/.ssh/gitops_ssh.pem -o StrictHostKeyChecking=no"
 ```
 
+> ⚠️ **Copy and run the export block before proceeding to STEP 4.** These vars are required by
+> the helm install command (`ARGOCD_CHART_VERSION`, `INBOUND_CIDRS`) and by STEP 5-6
+> (`GITOPS_REPO_URL_ARGOCD`, `GIT_SSH_COMMAND`). Missing them silently breaks later steps.
+
 **Copy and paste the export block from the script output, then verify the full stack:**
 
 ```bash
