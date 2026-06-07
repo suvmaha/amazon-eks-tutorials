@@ -613,13 +613,25 @@ echo "UI URL: http://${UI_URL}"
 
 > ALB takes 3-5 min to provision. Check `kubectl describe ingress -n ui ui` if it stays pending.
 
-**To revert** either option back to ClusterIP before continuing:
+**To revert (optional — avoids unnecessary LB costs while continuing the lab)**
 
+Option A — remove `ui/values.yaml` entries and restore service to ClusterIP:
 ```bash
-# Remove the LoadBalancer type or Ingress from values.yaml / templates/
+# Edit ui/values.yaml to remove the service block, then:
 git -C ~/environment/argocd add .
 git -C ~/environment/argocd commit -am "Revert UI to ClusterIP"
 git -C ~/environment/argocd push
+argocd app sync ui
+```
+
+Option B — remove the Ingress template (requires `--prune` to delete the live resource):
+```bash
+rm ~/environment/argocd/ui/templates/ingress.yaml
+rmdir ~/environment/argocd/ui/templates 2>/dev/null || true
+git -C ~/environment/argocd add .
+git -C ~/environment/argocd commit -am "Remove ALB Ingress"
+git -C ~/environment/argocd push
+argocd app sync ui --prune
 ```
 
 ---
