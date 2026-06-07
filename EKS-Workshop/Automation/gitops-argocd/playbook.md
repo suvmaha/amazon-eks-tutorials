@@ -511,7 +511,11 @@ kubectl port-forward -n ui svc/ui 8080:80
 ### STEP 7 (Optional) — Expose the UI externally
 
 The workshop uses port-forward for simplicity. These two options give you a real external URL.
-Both use Auto Mode's built-in load balancer — no separate LBC install needed.
+
+| Option | Auto Mode | Managed Node Group |
+|--------|-----------|-------------------|
+| A — NLB via LoadBalancer | ✅ Built-in LBC handles it | ✅ Helm LBC handles it |
+| B — ALB via Ingress | ❌ Skip — built-in LBC ignores Ingress | ✅ Helm LBC handles it |
 
 **Option A — NLB via LoadBalancer service (quickest)**
 
@@ -553,7 +557,10 @@ echo "UI URL: http://${UI_URL}"
 > ```
 > Confirm the LBC processed it: `kubectl get targetgroupbindings.eks.amazonaws.com -n ui`
 
-**Option B — ALB via Ingress (production pattern)**
+**Option B — ALB via Ingress (production pattern) — Managed Node Group only**
+
+> ⚠️ **Skip this if you are on Auto Mode.** Auto Mode's built-in LBC does not register an `alb`
+> IngressClass and silently ignores Ingress resources. You need the Helm-deployed LBC from STEP 3b.
 
 Gives you path-based routing, host-based routing, and TLS termination.
 Requires an `Ingress` resource with the ALB annotations.
