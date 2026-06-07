@@ -540,6 +540,19 @@ echo "UI URL: http://${UI_URL}"
 
 > NLB takes 2-3 min to provision. The site will be reachable on port 80.
 
+> ⚠️ **Auto Mode gotcha — service stuck at `<pending>`?**
+> The Auto Mode built-in LBC only fires when a service is **created** as `LoadBalancer`. If the
+> service already existed as `ClusterIP` (which it does here — ArgoCD deployed it first), patching
+> the type in-place doesn't trigger the LBC reconciler. No TGB gets created, no NLB appears.
+>
+> **Fix:** delete the service and let ArgoCD recreate it from scratch:
+> ```bash
+> kubectl delete svc -n ui ui
+> argocd app sync ui          # Manual sync policy — must trigger explicitly
+> kubectl get svc -n ui -w    # NLB hostname appears within 2-3 min
+> ```
+> Confirm the LBC processed it: `kubectl get targetgroupbindings.eks.amazonaws.com -n ui`
+
 **Option B — ALB via Ingress (production pattern)**
 
 Gives you path-based routing, host-based routing, and TLS termination.
