@@ -55,8 +55,9 @@ printf "║  Service account: %-50s║\n" "${SA_NAME} (${SA_NAMESPACE})"
 echo "╚══════════════════════════════════════════════════════════════════════╝"
 echo ""
 
-read -r -p "Proceed? (y/n): " confirm
-[[ "${confirm}" != "y" ]] && echo "Aborted." && exit 0
+read -r -p "Proceed? (Y/n): " confirm
+confirm="${confirm:-Y}"
+[[ "${confirm}" != "Y" && "${confirm}" != "y" ]] && echo "Aborted." && exit 0
 
 START=$(date +%s)
 START_LABEL=$(date '+%H:%M:%S')

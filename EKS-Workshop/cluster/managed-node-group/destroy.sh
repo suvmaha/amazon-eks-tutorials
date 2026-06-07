@@ -31,8 +31,9 @@ if [[ "${CLUSTER_STATUS}" == "NOT_FOUND" ]]; then
 fi
 
 echo "  Cluster status: ${CLUSTER_STATUS}"
-read -r -p "Delete cluster '${EKS_CLUSTER_NAME}'? This cannot be undone. (y/n): " confirm
-[[ "${confirm}" != "y" ]] && echo "Aborted." && exit 0
+read -r -p "Delete cluster '${EKS_CLUSTER_NAME}'? This cannot be undone. (Y/n): " confirm
+confirm="${confirm:-Y}"
+[[ "${confirm}" != "Y" && "${confirm}" != "y" ]] && echo "Aborted." && exit 0
 
 echo ""
 echo "── STEP 1: Delete EKS cluster with eksctl (~10-15 min) ─────────────────────"

@@ -16,8 +16,9 @@ printf "   Repo   : %s\n" "${REPO_NAME}"
 printf "   Region : %s\n" "${AWS_REGION}"
 printf "   User   : %s\n" "${IAM_USER}"
 echo ""
-read -r -p "Proceed? (y/n): " confirm
-[[ "${confirm}" != "y" ]] && echo "Aborted." && exit 0
+read -r -p "Proceed? (Y/n): " confirm
+confirm="${confirm:-Y}"
+[[ "${confirm}" != "Y" && "${confirm}" != "y" ]] && echo "Aborted." && exit 0
 
 echo ""
 echo "── STEP 1: Delete CodeCommit repository ────────────────────────────────────"

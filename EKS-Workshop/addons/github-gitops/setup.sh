@@ -57,8 +57,9 @@ printf "║  ArgoCD chart   : %-50s║\n" "${ARGOCD_CHART_VERSION}"
 echo "╚══════════════════════════════════════════════════════════════════════╝"
 echo ""
 
-read -r -p "Proceed? (y/n): " confirm
-[[ "${confirm}" != "y" ]] && echo "Aborted." && exit 0
+read -r -p "Proceed? (Y/n): " confirm
+confirm="${confirm:-Y}"
+[[ "${confirm}" != "Y" && "${confirm}" != "y" ]] && echo "Aborted." && exit 0
 
 START=$(date +%s)
 START_LABEL=$(date '+%H:%M:%S')

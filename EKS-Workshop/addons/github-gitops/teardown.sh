@@ -19,8 +19,9 @@ echo ""
 echo "── Remove: GitHub GitOps Repository ────────────────────────────────────────"
 printf "   Repo: %s/%s\n" "${GH_USER}" "${REPO_NAME}"
 echo ""
-read -r -p "Delete repo '${GH_USER}/${REPO_NAME}' and local SSH key? (y/n): " confirm
-[[ "${confirm}" != "y" ]] && echo "Aborted." && exit 0
+read -r -p "Delete repo '${GH_USER}/${REPO_NAME}' and local SSH key? (Y/n): " confirm
+confirm="${confirm:-Y}"
+[[ "${confirm}" != "Y" && "${confirm}" != "y" ]] && echo "Aborted." && exit 0
 
 echo ""
 echo "── STEP 1: Delete GitHub repository ────────────────────────────────────────"

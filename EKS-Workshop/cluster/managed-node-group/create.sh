@@ -59,8 +59,9 @@ printf "║  VPC            : %-50s║\n" "eksctl-managed (created with cluster)
 echo "╚══════════════════════════════════════════════════════════════════════╝"
 echo ""
 
-read -r -p "Proceed with cluster creation? (y/n): " confirm
-[[ "${confirm}" != "y" ]] && echo "Aborted." && exit 0
+read -r -p "Proceed with cluster creation? (Y/n): " confirm
+confirm="${confirm:-Y}"
+[[ "${confirm}" != "Y" && "${confirm}" != "y" ]] && echo "Aborted." && exit 0
 
 START=$(date +%s)
 START_LABEL=$(date '+%H:%M:%S')

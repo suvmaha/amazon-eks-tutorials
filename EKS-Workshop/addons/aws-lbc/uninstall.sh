@@ -15,8 +15,9 @@ echo ""
 echo "── Remove: AWS Load Balancer Controller ────────────────────────────────────"
 printf "   Cluster: %s | Region: %s\n" "${EKS_CLUSTER_NAME}" "${AWS_REGION}"
 echo ""
-read -r -p "Proceed? (y/n): " confirm
-[[ "${confirm}" != "y" ]] && echo "Aborted." && exit 0
+read -r -p "Proceed? (Y/n): " confirm
+confirm="${confirm:-Y}"
+[[ "${confirm}" != "Y" && "${confirm}" != "y" ]] && echo "Aborted." && exit 0
 
 echo ""
 echo "── STEP 1: Helm uninstall ──────────────────────────────────────────────────"
