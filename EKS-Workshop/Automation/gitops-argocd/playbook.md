@@ -601,8 +601,9 @@ git -C ~/environment/argocd add .
 git -C ~/environment/argocd commit -am "Expose UI via ALB Ingress"
 git -C ~/environment/argocd push
 
-# Wait ~5s for auto-sync, then get the URL
-kubectl get ingress -n ui
+# Wait ~5s for auto-sync, then watch until ADDRESS appears
+kubectl get ingress -n ui -w
+# Once ADDRESS shows a hostname, Ctrl+C then:
 export UI_URL=$(kubectl get ingress -n ui ui \
   -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
 echo "UI URL: http://${UI_URL}"
