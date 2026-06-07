@@ -8,6 +8,25 @@ All `cp` commands reference files already in this repo — no external workshop 
 
 ---
 
+## Table of Contents
+
+- [STEP 1 — Verify Tools](#step-1--verify-tools)
+- [STEP 2 — Clone the repo and explore the structure](#step-2--clone-the-repo-and-explore-the-structure)
+- [STEP 3 — Build the cluster stack](#step-3--build-the-cluster-stack)
+  - [3a — Create the EKS cluster](#3a--create-the-eks-cluster-30-min)
+  - [3b — Install AWS Load Balancer Controller](#3b--install-aws-load-balancer-controller)
+  - [3c — Set up the GitOps repository](#3c--set-up-the-gitops-repository-choose-one)
+- [STEP 4 — Install Argo CD](#step-4--install-argo-cd)
+- [STEP 5 — Wait for the NLB and log in](#step-5--wait-for-the-nlb-and-log-in)
+- [STEP 6 — Set up the GitOps working directory](#step-6--set-up-the-gitops-working-directory)
+- [STEP 7 — Deploy the UI component via Argo CD](#step-7--deploy-the-ui-component-via-argo-cd)
+- [STEP 8 — Update the application via GitOps](#step-8--update-the-application-via-gitops)
+- [STEP 9 — Set up App of Apps](#step-9--set-up-app-of-apps)
+- [STEP 10 — Add all workload charts](#step-10--add-all-workload-charts)
+- [STEP 11 — Tear Down](#step-11--tear-down)
+
+---
+
 ## STEP 1 — Verify Tools
 
 Confirm every CLI tool is installed and your AWS session is active before touching infrastructure.
