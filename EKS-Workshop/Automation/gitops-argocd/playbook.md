@@ -533,16 +533,17 @@ EOF
 git -C ~/environment/argocd add .
 git -C ~/environment/argocd commit -am "Expose UI via NLB"
 git -C ~/environment/argocd push
+argocd app sync ui
 
-# Wait ~5s for auto-sync, then get the URL
+# Watch until EXTERNAL-IP appears
 kubectl get svc -n ui ui -w
-# Wait until EXTERNAL-IP shows a hostname, then:
+# Once EXTERNAL-IP shows a hostname, Ctrl+C then:
 export UI_URL=$(kubectl get svc -n ui ui \
   -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
 echo "UI URL: http://${UI_URL}"
 ```
 
-> NLB takes 2-3 min to provision. The site will be reachable on port 80.
+> NLB hostname appears within seconds but takes 2-3 min to become fully active. The site will be reachable on port 80.
 
 > ⚠️ **Auto Mode gotcha — service stuck at `<pending>`?**
 > The Auto Mode built-in LBC only fires when a service is **created** as `LoadBalancer`. If the
