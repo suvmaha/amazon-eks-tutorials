@@ -557,13 +557,19 @@ echo "UI URL: http://${UI_URL}"
 > ```
 > Confirm the LBC processed it: `kubectl get targetgroupbindings.eks.amazonaws.com -n ui`
 
-**Option B — ALB via Ingress (production pattern) — Managed Node Group only**
-
-> ⚠️ **Skip this if you are on Auto Mode.** Auto Mode's built-in LBC does not register an `alb`
-> IngressClass and silently ignores Ingress resources. You need the Helm-deployed LBC from STEP 3b.
+**Option B — ALB via Ingress (production pattern)**
 
 Gives you path-based routing, host-based routing, and TLS termination.
 Requires an `Ingress` resource with the ALB annotations.
+
+> **Auto Mode users:** The built-in LBC handles NLB only — it does not register an `alb` IngressClass
+> and silently ignores Ingress resources. To use Option B on Auto Mode, first install the Helm LBC:
+> ```bash
+> # Run STEP 3b (if you skipped it), then return here
+> ${REPO_ROOT}/EKS-Workshop/addons/aws-lbc/install.sh
+> ```
+> The Helm LBC and the built-in LBC coexist without conflict — the built-in handles `LoadBalancer`
+> services (NLB) and the Helm LBC handles `Ingress` resources (ALB). You can run both simultaneously.
 
 ```bash
 mkdir -p ~/environment/argocd/ui/templates
