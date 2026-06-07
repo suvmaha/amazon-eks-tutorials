@@ -184,7 +184,22 @@ ${REPO_ROOT}/EKS-Workshop/cluster/auto-mode/create.sh
 
 ---
 
-**3b — Install AWS Load Balancer Controller (Managed Node Group only — skip for Auto Mode)**
+**3b — Install AWS Load Balancer Controller**
+
+> ⚠️ **Managed Node Group only — skip this step if you chose Auto Mode.**
+>
+> **Why:** EKS Auto Mode includes a built-in load balancer controller managed by AWS — it's part
+> of the Auto Mode compute plane, not a separate install. When you create a `LoadBalancer` service
+> with the NLB annotations, Auto Mode provisions it natively without Helm or IRSA wiring.
+>
+> Plain EKS nodes (managed node group) have no load balancer awareness — you must install the LBC
+> yourself and give it an IAM role (IRSA) so it can call the AWS ELB APIs.
+>
+> | | Managed Node Group | Auto Mode |
+> |---|---|---|
+> | LBC | You install via Helm + IRSA | AWS runs it for you |
+> | EBS CSI | You install as an addon | Built-in |
+> | Nodes | Always running | Appear on demand |
 
 ```bash
 ${REPO_ROOT}/EKS-Workshop/addons/aws-lbc/install.sh
@@ -698,6 +713,14 @@ ${REPO_ROOT}/EKS-Workshop/cluster/managed-node-group/destroy.sh
 
 # Option B — Auto Mode
 ${REPO_ROOT}/EKS-Workshop/cluster/auto-mode/destroy.sh
+```
+
+**Confirm zero spend**
+
+```bash
+${REPO_ROOT}/EKS-Workshop/scripts/cost-check.sh
+
+# Expected: ✅ All clear — no billable resources found in us-east-1
 
 # OUTPUT
 ── STEP 1: Delete EKS cluster with eksctl (~10-15 min) ─────────────────────
