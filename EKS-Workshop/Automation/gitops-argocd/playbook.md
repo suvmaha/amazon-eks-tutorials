@@ -600,8 +600,9 @@ EOF
 git -C ~/environment/argocd add .
 git -C ~/environment/argocd commit -am "Expose UI via ALB Ingress"
 git -C ~/environment/argocd push
+argocd app sync ui
 
-# Wait ~5s for auto-sync, then watch until ADDRESS appears
+# Watch until ADDRESS appears
 kubectl get ingress -n ui -w
 # Once ADDRESS shows a hostname, Ctrl+C then:
 export UI_URL=$(kubectl get ingress -n ui ui \
