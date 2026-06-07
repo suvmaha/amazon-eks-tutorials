@@ -515,9 +515,8 @@ Both use Auto Mode's built-in load balancer — no separate LBC install needed.
 
 **Option A — NLB via LoadBalancer service (quickest)**
 
-Add to `~/environment/argocd/ui/values.yaml`:
-
-```yaml
+```bash
+cat >> ~/environment/argocd/ui/values.yaml <<'EOF'
 ui:
   service:
     type: LoadBalancer
@@ -525,9 +524,8 @@ ui:
       service.beta.kubernetes.io/aws-load-balancer-type: external
       service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
       service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: instance
-```
+EOF
 
-```bash
 git -C ~/environment/argocd add .
 git -C ~/environment/argocd commit -am "Expose UI via NLB"
 git -C ~/environment/argocd push
@@ -547,9 +545,10 @@ echo "UI URL: http://${UI_URL}"
 Gives you path-based routing, host-based routing, and TLS termination.
 Requires an `Ingress` resource with the ALB annotations.
 
-Create `~/environment/argocd/ui/templates/ingress.yaml`:
+```bash
+mkdir -p ~/environment/argocd/ui/templates
 
-```yaml
+cat > ~/environment/argocd/ui/templates/ingress.yaml <<'EOF'
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -570,9 +569,8 @@ spec:
                 name: ui
                 port:
                   number: 80
-```
+EOF
 
-```bash
 git -C ~/environment/argocd add .
 git -C ~/environment/argocd commit -am "Expose UI via ALB Ingress"
 git -C ~/environment/argocd push
