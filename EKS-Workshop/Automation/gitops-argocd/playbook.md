@@ -20,6 +20,7 @@ All `cp` commands reference files already in this repo — no external workshop 
 - [STEP 5 — Wait for the NLB and log in](#step-5--wait-for-the-nlb-and-log-in)
 - [STEP 6 — Set up the GitOps working directory](#step-6--set-up-the-gitops-working-directory)
 - [STEP 7 — Deploy the UI component via Argo CD](#step-7--deploy-the-ui-component-via-argo-cd)
+  - [STEP 7 (Optional) — Expose the UI externally](#step-7-optional--expose-the-ui-externally)
 - [STEP 8 — Update the application via GitOps](#step-8--update-the-application-via-gitops)
 - [STEP 9 — Set up App of Apps](#step-9--set-up-app-of-apps)
 - [STEP 10 — Add all workload charts](#step-10--add-all-workload-charts)
@@ -496,6 +497,102 @@ kubectl get pod -n ui
 
 # NAME   READY   UP-TO-DATE   AVAILABLE   AGE
 # ui     1/1     1            1           61s
+```
+
+**Access the UI locally via port-forward**
+
+```bash
+kubectl port-forward -n ui svc/ui 8080:80
+# Open: http://localhost:8080
+```
+
+---
+
+### STEP 7 (Optional) — Expose the UI externally
+
+The workshop uses port-forward for simplicity. These two options give you a real external URL.
+Both use Auto Mode's built-in load balancer — no separate LBC install needed.
+
+**Option A — NLB via LoadBalancer service (quickest)**
+
+Add to `~/environment/argocd/ui/values.yaml`:
+
+```yaml
+ui:
+  service:
+    type: LoadBalancer
+    annotations:
+      service.beta.kubernetes.io/aws-load-balancer-type: external
+      service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+      service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: instance
+```
+
+```bash
+git -C ~/environment/argocd add .
+git -C ~/environment/argocd commit -am "Expose UI via NLB"
+git -C ~/environment/argocd push
+
+# Wait ~5s for auto-sync, then get the URL
+kubectl get svc -n ui ui -w
+# Wait until EXTERNAL-IP shows a hostname, then:
+export UI_URL=$(kubectl get svc -n ui ui \
+  -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+echo "UI URL: http://${UI_URL}"
+```
+
+> NLB takes 2-3 min to provision. The site will be reachable on port 80.
+
+**Option B — ALB via Ingress (production pattern)**
+
+Gives you path-based routing, host-based routing, and TLS termination.
+Requires an `Ingress` resource with the ALB annotations.
+
+Create `~/environment/argocd/ui/templates/ingress.yaml`:
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ui
+  namespace: ui
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+spec:
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ui
+                port:
+                  number: 80
+```
+
+```bash
+git -C ~/environment/argocd add .
+git -C ~/environment/argocd commit -am "Expose UI via ALB Ingress"
+git -C ~/environment/argocd push
+
+# Wait ~5s for auto-sync, then get the URL
+kubectl get ingress -n ui
+export UI_URL=$(kubectl get ingress -n ui ui \
+  -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+echo "UI URL: http://${UI_URL}"
+```
+
+> ALB takes 3-5 min to provision. Check `kubectl describe ingress -n ui ui` if it stays pending.
+
+**To revert** either option back to ClusterIP before continuing:
+
+```bash
+# Remove the LoadBalancer type or Ingress from values.yaml / templates/
+git -C ~/environment/argocd add .
+git -C ~/environment/argocd commit -am "Revert UI to ClusterIP"
+git -C ~/environment/argocd push
 ```
 
 ---
