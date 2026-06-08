@@ -848,29 +848,47 @@ kubectl delete namespace -l app.kubernetes.io/created-by=eks-workshop
 # namespace "ui" deleted
 ```
 
-**Remove the GitOps repository**
+**Remove the GitOps repository — run ONE block only**
 
+If you used CodeCommit (STEP 3b Option A):
 ```bash
-# Option A — CodeCommit
 ${REPO_ROOT}/EKS-Workshop/addons/codecommit/teardown.sh
+```
 
-# Option B — GitHub
+If you used GitHub (STEP 3b Option B):
+```bash
 ${REPO_ROOT}/EKS-Workshop/addons/github-gitops/teardown.sh
 ```
 
-**Remove AWS Load Balancer Controller (Managed Node Group only — skip for Auto Mode)**
+**Remove AWS Load Balancer Controller — run ONE block only**
 
+If you are on Managed Node Group (or installed Helm LBC on Auto Mode for Option B ALB):
 ```bash
 ${REPO_ROOT}/EKS-Workshop/addons/aws-lbc/uninstall.sh
 ```
 
-**Delete the cluster (match whichever you created in STEP 3a)**
-
+If you are on Auto Mode and did NOT install the Helm LBC:
 ```bash
-# Option A — Managed Node Group
-${REPO_ROOT}/EKS-Workshop/cluster/managed-node-group/destroy.sh
+# No LBC to remove — built-in LBC is managed by AWS, skip this step
+```
 
-# Option B — Auto Mode
+> ⚠️ **Before destroying the cluster** — if you tested Option A (NLB) or Option B (ALB), delete
+> the load balancers first or `eksctl` will time out waiting for them:
+> ```bash
+> kubectl delete svc -n ui ui          # removes NLB (Option A)
+> kubectl delete ingress -n ui ui      # removes ALB (Option B)
+> # Wait ~60s for LBs to deregister before running destroy
+> ```
+
+**Delete the cluster — run ONE block only**
+
+If you created a Managed Node Group cluster (STEP 3a Option A):
+```bash
+${REPO_ROOT}/EKS-Workshop/cluster/managed-node-group/destroy.sh
+```
+
+If you created an Auto Mode cluster (STEP 3a Option B):
+```bash
 ${REPO_ROOT}/EKS-Workshop/cluster/auto-mode/destroy.sh
 ```
 
