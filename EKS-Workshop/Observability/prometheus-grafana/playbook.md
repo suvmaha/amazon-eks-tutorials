@@ -8,6 +8,14 @@ explore built-in Kubernetes dashboards, and expose Grafana externally.
 
 ---
 
+## Run Log
+
+| Date | Cluster Type | Result |
+|------|-------------|--------|
+| 2026-06-11 | Auto Mode (EKS 1.35) | ✅ Certified — ran end-to-end successfully |
+
+---
+
 ## Table of Contents
 
 - [STEP 1 — Verify Tools](#step-1--verify-tools)

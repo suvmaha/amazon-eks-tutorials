@@ -12,6 +12,14 @@ does everything transparently so you understand every moving part.
 
 ---
 
+## Run Log
+
+| Date | Cluster Type | Result |
+|------|-------------|--------|
+| — | — | Not yet run |
+
+---
+
 ## Table of Contents
 
 - [Architecture](#architecture)
