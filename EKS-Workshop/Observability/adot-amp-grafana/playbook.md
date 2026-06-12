@@ -15,16 +15,17 @@ does everything transparently so you understand every moving part.
 ## Table of Contents
 
 - [Architecture](#architecture)
-- [Prerequisites](#prerequisites)
-- [STEP 1 — Export env vars](#step-1--export-env-vars)
-- [STEP 2 — Create cluster](#step-2--create-cluster)
-- [STEP 3 — Install ADOT + AMP + Grafana](#step-3--install-adot--amp--grafana)
-- [STEP 4 — Deploy ADOT collector](#step-4--deploy-adot-collector)
-- [STEP 5 — Verify metrics in AMP](#step-5--verify-metrics-in-amp)
-- [STEP 6 — Access Grafana](#step-6--access-grafana)
-- [STEP 7 — Explore dashboards](#step-7--explore-dashboards)
-- [STEP 8 (Optional) — Expose Grafana externally via NLB](#step-8-optional--expose-grafana-externally-via-nlb)
-- [STEP 9 — Tear Down](#step-9--tear-down)
+- [STEP 1 — Verify Tools](#step-1--verify-tools)
+- [STEP 2 — Clone the repo](#step-2--clone-the-repo)
+- [STEP 3 — Export env vars](#step-3--export-env-vars)
+- [STEP 4 — Create cluster](#step-4--create-cluster)
+- [STEP 5 — Install ADOT + AMP + Grafana](#step-5--install-adot--amp--grafana)
+- [STEP 6 — Deploy ADOT collector](#step-6--deploy-adot-collector)
+- [STEP 7 — Verify metrics in AMP](#step-7--verify-metrics-in-amp)
+- [STEP 8 — Access Grafana](#step-8--access-grafana)
+- [STEP 9 — Explore dashboards](#step-9--explore-dashboards)
+- [STEP 10 (Optional) — Expose Grafana externally via NLB](#step-10-optional--expose-grafana-externally-via-nlb)
+- [STEP 11 — Tear Down](#step-11--tear-down)
 
 ---
 
@@ -62,20 +63,15 @@ does everything transparently so you understand every moving part.
 
 ---
 
-## Prerequisites
-
-| Tool | Version |
-|------|---------|
-| aws CLI | v2 |
-| eksctl | latest |
-| kubectl | matches cluster |
-| helm | v3 |
-| jq | any |
-| awscurl | any (for AMP verification) |
+## STEP 1 — Verify Tools
 
 ```bash
-aws --version && eksctl version && kubectl version --client --short
-helm version --short && jq --version
+aws --version              # aws-cli/2.x
+eksctl version             # 0.200+
+kubectl version --client   # v1.3x
+helm version --short       # v3.x
+jq --version               # jq-1.7+
+
 aws sts get-caller-identity
 
 # Install awscurl if needed (used to query AMP directly)
@@ -84,7 +80,21 @@ pip3 install awscurl
 
 ---
 
-## STEP 1 — Export env vars
+## STEP 2 — Clone the repo
+
+```bash
+git clone https://github.com/suvmaha/amazon-eks-tutorials.git
+cd amazon-eks-tutorials
+
+# Set REPO_ROOT — all paths in this playbook are relative to here
+export REPO_ROOT=$(pwd)
+
+tree EKS-Workshop/Observability/adot-amp-grafana/
+```
+
+---
+
+## STEP 3 — Export env vars
 
 > ⚠️ **Export these before every step. They are required by all scripts.**
 
@@ -92,12 +102,11 @@ pip3 install awscurl
 export EKS_CLUSTER_NAME=eks-workshop
 export AWS_REGION=us-east-1
 export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --output text --query 'Account')
-export REPO_ROOT=~/repos-jdl/2026-jdluther2020/amazon-eks-tutorials
 ```
 
 ---
 
-## STEP 2 — Create cluster
+## STEP 4 — Create cluster
 
 | Option | Script | Notes |
 |--------|--------|-------|
@@ -118,7 +127,7 @@ ${REPO_ROOT}/EKS-Workshop/cluster/auto-mode/create.sh
 
 ---
 
-## STEP 3 — Install ADOT + AMP + Grafana
+## STEP 5 — Install ADOT + AMP + Grafana
 
 This script does everything in one shot:
 1. Creates AMP workspace
@@ -172,7 +181,7 @@ echo "AMP Endpoint : ${AMP_ENDPOINT}"
 
 ---
 
-## STEP 4 — Deploy ADOT collector
+## STEP 6 — Deploy ADOT collector
 
 Apply the ClusterRole and the OpenTelemetryCollector CRD. The manifest uses `envsubst` to inject
 `AWS_REGION` and `AMP_REMOTE_WRITE` into the collector config.
@@ -201,7 +210,7 @@ kubectl -n monitoring get opentelemetrycollector adot -o jsonpath='{.spec.config
 
 ---
 
-## STEP 5 — Verify metrics in AMP
+## STEP 7 — Verify metrics in AMP
 
 Query AMP directly to confirm metrics are flowing in. Wait ~60s after the collector starts.
 
@@ -225,7 +234,7 @@ awscurl -X POST \
 
 ---
 
-## STEP 6 — Access Grafana
+## STEP 8 — Access Grafana
 
 ```bash
 kubectl port-forward -n monitoring svc/grafana 3000:80
@@ -249,7 +258,7 @@ kubectl get secret -n monitoring grafana \
 
 ---
 
-## STEP 7 — Explore dashboards
+## STEP 9 — Explore dashboards
 
 Grafana ships without pre-built Kubernetes dashboards when using AMP as a datasource.
 Import the standard dashboards from grafana.com:
@@ -284,7 +293,7 @@ sum(rate(container_cpu_usage_seconds_total{container!=""}[5m])) by (namespace)
 
 ---
 
-## STEP 8 (Optional) — Expose Grafana externally via NLB
+## STEP 10 (Optional) — Expose Grafana externally via NLB
 
 ```bash
 kubectl patch svc grafana -n monitoring \
@@ -302,7 +311,7 @@ echo "Grafana URL: http://${GRAFANA_URL}"
 
 ---
 
-## STEP 9 — Tear Down
+## STEP 11 — Tear Down
 
 > ⚠️ **Delete any NLBs before destroying the cluster** to avoid `eksctl` timeout:
 > ```bash

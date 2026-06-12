@@ -10,48 +10,58 @@ explore built-in Kubernetes dashboards, and expose Grafana externally.
 
 ## Table of Contents
 
-- [Prerequisites](#prerequisites)
-- [STEP 1 — Export env vars](#step-1--export-env-vars)
-- [STEP 2 — Create cluster](#step-2--create-cluster)
-- [STEP 3 — Install kube-prometheus-stack](#step-3--install-kube-prometheus-stack)
-- [STEP 4 — Access Grafana (port-forward)](#step-4--access-grafana-port-forward)
-- [STEP 5 — Explore dashboards](#step-5--explore-dashboards)
-- [STEP 6 (Optional) — Expose Grafana externally via NLB](#step-6-optional--expose-grafana-externally-via-nlb)
-- [STEP 7 — Tear Down](#step-7--tear-down)
+- [STEP 1 — Verify Tools](#step-1--verify-tools)
+- [STEP 2 — Clone the repo](#step-2--clone-the-repo)
+- [STEP 3 — Export env vars](#step-3--export-env-vars)
+- [STEP 4 — Create cluster](#step-4--create-cluster)
+- [STEP 5 — Install kube-prometheus-stack](#step-5--install-kube-prometheus-stack)
+- [STEP 6 — Access Grafana (port-forward)](#step-6--access-grafana-port-forward)
+- [STEP 7 — Explore dashboards](#step-7--explore-dashboards)
+- [STEP 8 (Optional) — Expose Grafana externally via NLB](#step-8-optional--expose-grafana-externally-via-nlb)
+- [STEP 9 — Tear Down](#step-9--tear-down)
 
 ---
 
-## Prerequisites
-
-| Tool | Version |
-|------|---------|
-| aws CLI | v2 |
-| eksctl | latest |
-| kubectl | matches cluster |
-| helm | v3 |
-| jq | any |
+## STEP 1 — Verify Tools
 
 ```bash
-aws --version && eksctl version && kubectl version --client --short
-helm version --short && jq --version
+aws --version              # aws-cli/2.x
+eksctl version             # 0.200+
+kubectl version --client   # v1.3x
+helm version --short       # v3.x
+jq --version               # jq-1.7+
+
 aws sts get-caller-identity
 ```
 
 ---
 
-## STEP 1 — Export env vars
+## STEP 2 — Clone the repo
+
+```bash
+git clone https://github.com/suvmaha/amazon-eks-tutorials.git
+cd amazon-eks-tutorials
+
+# Set REPO_ROOT — all paths in this playbook are relative to here
+export REPO_ROOT=$(pwd)
+
+tree EKS-Workshop/Observability/prometheus-grafana/
+```
+
+---
+
+## STEP 3 — Export env vars
 
 > ⚠️ **Export these before every step. They are required by all scripts.**
 
 ```bash
 export EKS_CLUSTER_NAME=eks-workshop
 export AWS_REGION=us-east-1
-export REPO_ROOT=~/repos-jdl/2026-jdluther2020/amazon-eks-tutorials
 ```
 
 ---
 
-## STEP 2 — Create cluster
+## STEP 4 — Create cluster
 
 | Option | Script | Notes |
 |--------|--------|-------|
@@ -72,7 +82,7 @@ ${REPO_ROOT}/EKS-Workshop/cluster/auto-mode/create.sh
 
 ---
 
-## STEP 3 — Install kube-prometheus-stack
+## STEP 5 — Install kube-prometheus-stack
 
 Installs Prometheus, Grafana, AlertManager, kube-state-metrics, and node-exporter in one Helm chart.
 
@@ -105,7 +115,7 @@ alertmanager-kube-prometheus-stack-alertmanager-0      2/2     Running   0      
 
 ---
 
-## STEP 4 — Access Grafana (port-forward)
+## STEP 6 — Access Grafana (port-forward)
 
 ```bash
 kubectl port-forward -n monitoring svc/kube-prometheus-stack-grafana 3000:80
@@ -120,7 +130,7 @@ Open: http://localhost:3000
 
 ---
 
-## STEP 5 — Explore dashboards
+## STEP 7 — Explore dashboards
 
 In Grafana → **Dashboards** → **Browse**. Pre-loaded dashboards include:
 
@@ -150,7 +160,7 @@ Open: http://localhost:9090 → try query: `sum(rate(container_cpu_usage_seconds
 
 ---
 
-## STEP 6 (Optional) — Expose Grafana externally via NLB
+## STEP 8 (Optional) — Expose Grafana externally via NLB
 
 > Requires LBC installed. On MNG: already done in STEP 2 addon. On Auto Mode: built-in LBC handles it.
 
@@ -184,7 +194,7 @@ kubectl patch svc kube-prometheus-stack-grafana -n monitoring \
 
 ---
 
-## STEP 7 — Tear Down
+## STEP 9 — Tear Down
 
 **Remove kube-prometheus-stack:**
 
