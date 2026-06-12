@@ -116,11 +116,13 @@ export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --output text --query 'Accou
 If you already have an `eks-workshop` cluster running, skip to STEP 3.
 
 Managed Node Group:
+→ [create.sh](../../cluster/managed-node-group/create.sh)
 ```bash
 ${REPO_ROOT}/EKS-Workshop/cluster/managed-node-group/create.sh
 ```
 
 Auto Mode:
+→ [create.sh](../../cluster/auto-mode/create.sh)
 ```bash
 ${REPO_ROOT}/EKS-Workshop/cluster/auto-mode/create.sh
 ```
@@ -136,6 +138,8 @@ This script does everything in one shot:
 4. Creates IRSA for ADOT collector (`AmazonPrometheusRemoteWriteAccess`)
 5. Creates IRSA for Grafana (`AmazonPrometheusQueryAccess`)
 6. Installs Grafana with AMP pre-configured as datasource
+
+→ [install.sh](../../addons/adot-amp-grafana/install.sh)
 
 ```bash
 ${REPO_ROOT}/EKS-Workshop/addons/adot-amp-grafana/install.sh
@@ -320,6 +324,7 @@ echo "Grafana URL: http://${GRAFANA_URL}"
 > ```
 
 **Remove ADOT + AMP + Grafana:**
+→ [uninstall.sh](../../addons/adot-amp-grafana/uninstall.sh)
 
 ```bash
 ${REPO_ROOT}/EKS-Workshop/addons/adot-amp-grafana/uninstall.sh
@@ -328,11 +333,13 @@ ${REPO_ROOT}/EKS-Workshop/addons/adot-amp-grafana/uninstall.sh
 **Delete the cluster — run ONE block only**
 
 If you created a Managed Node Group cluster:
+→ [destroy.sh](../../cluster/managed-node-group/destroy.sh)
 ```bash
 ${REPO_ROOT}/EKS-Workshop/cluster/managed-node-group/destroy.sh
 ```
 
 If you created an Auto Mode cluster:
+→ [destroy.sh](../../cluster/auto-mode/destroy.sh)
 ```bash
 ${REPO_ROOT}/EKS-Workshop/cluster/auto-mode/destroy.sh
 ```

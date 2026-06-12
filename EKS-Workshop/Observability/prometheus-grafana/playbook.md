@@ -71,11 +71,13 @@ export AWS_REGION=us-east-1
 If you already have an `eks-workshop` cluster running, skip to STEP 3.
 
 Managed Node Group:
+→ [create.sh](../../cluster/managed-node-group/create.sh)
 ```bash
 ${REPO_ROOT}/EKS-Workshop/cluster/managed-node-group/create.sh
 ```
 
 Auto Mode:
+→ [create.sh](../../cluster/auto-mode/create.sh)
 ```bash
 ${REPO_ROOT}/EKS-Workshop/cluster/auto-mode/create.sh
 ```
@@ -85,6 +87,7 @@ ${REPO_ROOT}/EKS-Workshop/cluster/auto-mode/create.sh
 ## STEP 5 — Install kube-prometheus-stack
 
 Installs Prometheus, Grafana, AlertManager, kube-state-metrics, and node-exporter in one Helm chart.
+→ [install.sh](../../addons/kube-prometheus-stack/install.sh)
 
 ```bash
 ${REPO_ROOT}/EKS-Workshop/addons/kube-prometheus-stack/install.sh
@@ -197,6 +200,7 @@ kubectl patch svc kube-prometheus-stack-grafana -n monitoring \
 ## STEP 9 — Tear Down
 
 **Remove kube-prometheus-stack:**
+→ [uninstall.sh](../../addons/kube-prometheus-stack/uninstall.sh)
 
 ```bash
 ${REPO_ROOT}/EKS-Workshop/addons/kube-prometheus-stack/uninstall.sh
@@ -205,11 +209,13 @@ ${REPO_ROOT}/EKS-Workshop/addons/kube-prometheus-stack/uninstall.sh
 **Delete the cluster — run ONE block only**
 
 If you created a Managed Node Group cluster:
+→ [destroy.sh](../../cluster/managed-node-group/destroy.sh)
 ```bash
 ${REPO_ROOT}/EKS-Workshop/cluster/managed-node-group/destroy.sh
 ```
 
 If you created an Auto Mode cluster:
+→ [destroy.sh](../../cluster/auto-mode/destroy.sh)
 ```bash
 ${REPO_ROOT}/EKS-Workshop/cluster/auto-mode/destroy.sh
 ```
