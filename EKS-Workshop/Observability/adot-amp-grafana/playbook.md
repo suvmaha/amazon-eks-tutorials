@@ -352,9 +352,6 @@ If you created an Auto Mode cluster:
 ${REPO_ROOT}/EKS-Workshop/cluster/auto-mode/destroy.sh
 ```
 
-**Confirm zero spend:**
+Cost check runs automatically at the end of the destroy script.
 
-```bash
-${REPO_ROOT}/EKS-Workshop/scripts/cost-check.sh
-# Note: AMP has no per-hour charge when empty — only per-metric ingestion cost
-```
+> Note: AMP has no per-hour charge when empty — only per-metric ingestion cost.

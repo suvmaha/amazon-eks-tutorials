@@ -65,6 +65,10 @@ CF_STACK=$(aws cloudformation describe-stacks \
     && echo "  ✅  eksctl CloudFormation stack deleted" \
     || echo "  ❌  CloudFormation stack still exists (${CF_STACK})"
 
+echo ""
+echo "── STEP 3: Cost check ──────────────────────────────────────────────────────"
+"${SCRIPT_DIR}/../../scripts/cost-check.sh"
+
 END=$(date +%s)
 ELAPSED=$(( END - START ))
 MIN=$(( ELAPSED / 60 ))

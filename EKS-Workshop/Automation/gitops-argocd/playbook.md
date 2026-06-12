@@ -900,20 +900,4 @@ If you created an Auto Mode cluster (STEP 3a Option B):
 ${REPO_ROOT}/EKS-Workshop/cluster/auto-mode/destroy.sh
 ```
 
-**Confirm zero spend**
-
-```bash
-${REPO_ROOT}/EKS-Workshop/scripts/cost-check.sh
-
-# Expected: ✅ All clear — no billable resources found in us-east-1
-
-# OUTPUT
-── STEP 1: Delete EKS cluster with eksctl (~10-15 min) ─────────────────────
-  Cluster deleted.
-
-── Final check ─────────────────────────────────────────────────────────────
-  ✅  EKS cluster deleted
-  ✅  eksctl CloudFormation stack deleted
-
-⏱  Elapsed: 12m 4s
-```
+Cost check runs automatically at the end of the destroy script.

@@ -245,8 +245,4 @@ If you created an Auto Mode cluster:
 ${REPO_ROOT}/EKS-Workshop/cluster/auto-mode/destroy.sh
 ```
 
-**Confirm zero spend:**
-
-```bash
-${REPO_ROOT}/EKS-Workshop/scripts/cost-check.sh
-```
+Cost check runs automatically at the end of the destroy script.
