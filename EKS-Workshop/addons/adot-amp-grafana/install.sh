@@ -102,16 +102,15 @@ serviceAccount:
 adminUser: admin
 adminPassword: admin
 
-grafana.ini:
-  auth.anonymous:
-    enabled: false
+plugins:
+  - grafana-amazonprometheus-datasource
 
 datasources:
   datasources.yaml:
     apiVersion: 1
     datasources:
       - name: AMP
-        type: prometheus
+        type: grafana-amazonprometheus-datasource
         url: ${AMP_ENDPOINT}
         access: proxy
         isDefault: true

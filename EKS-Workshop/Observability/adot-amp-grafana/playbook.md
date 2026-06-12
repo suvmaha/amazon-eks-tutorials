@@ -16,7 +16,7 @@ does everything transparently so you understand every moving part.
 
 | Date | Cluster Type | Result |
 |------|-------------|--------|
-| — | — | Not yet run |
+| 2026-06-12 | Auto Mode (EKS 1.35) | ✅ Certified — ran end-to-end successfully |
 
 ---
 
@@ -235,11 +235,11 @@ awscurl -X POST \
   "${AMP_ENDPOINT}api/v1/query?query=up" | jq '.data.result | length'
 # Should return a number > 0
 
-# Query node CPU usage
+# Query container CPU usage (ADOT scrapes cadvisor — no node-exporter here)
 awscurl -X POST \
   --region "${AWS_REGION}" \
   --service aps \
-  "${AMP_ENDPOINT}api/v1/query?query=node_cpu_seconds_total" \
+  "${AMP_ENDPOINT}api/v1/query?query=container_cpu_usage_seconds_total" \
   | jq '.data.result[0]'
 ```
 
@@ -308,19 +308,48 @@ sum(rate(container_cpu_usage_seconds_total{container!=""}[5m])) by (namespace)
 
 ## STEP 10 (Optional) — Expose Grafana externally via NLB
 
+> ⚠️ **Auto Mode vs Managed Node Group behave differently here — follow your cluster type.**
+
+### Option A — Managed Node Group
+
 ```bash
 kubectl patch svc grafana -n monitoring \
   -p '{"spec":{"type":"LoadBalancer"},"metadata":{"annotations":{"service.beta.kubernetes.io/aws-load-balancer-type":"external","service.beta.kubernetes.io/aws-load-balancer-scheme":"internet-facing","service.beta.kubernetes.io/aws-load-balancer-nlb-target-type":"instance"}}}'
 
 kubectl get svc -n monitoring grafana -w
-# Once EXTERNAL-IP appears:
+```
+
+### Option B — Auto Mode
+
+The built-in LBC only fires on service **creation**, not patch. Use helm upgrade to delete and recreate with NLB annotations:
+
+```bash
+kubectl delete svc grafana -n monitoring
+
+helm upgrade grafana grafana/grafana \
+  --namespace monitoring \
+  --values /tmp/grafana-values.yaml \
+  --set service.type=LoadBalancer \
+  --set "service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-type=external" \
+  --set "service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-scheme=internet-facing" \
+  --set "service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-nlb-target-type=instance" \
+  --wait --timeout 5m
+
+kubectl get svc -n monitoring grafana -w
+```
+
+### Once EXTERNAL-IP appears (both options)
+
+```bash
 export GRAFANA_URL=$(kubectl get svc -n monitoring grafana \
   -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
 echo "Grafana URL: http://${GRAFANA_URL}"
 ```
 
-> ⚠️ **Auto Mode gotcha:** If the service stays `<pending>`, delete and re-create — the built-in LBC
-> only fires on service creation, not patch. See prometheus-grafana playbook STEP 6 for the full pattern.
+**To revert to ClusterIP before teardown:**
+```bash
+kubectl patch svc grafana -n monitoring -p '{"spec":{"type":"ClusterIP"}}'
+```
 
 ---
 
