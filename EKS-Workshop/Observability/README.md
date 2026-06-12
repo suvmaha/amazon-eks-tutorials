@@ -9,12 +9,20 @@ Logs, metrics, traces, resource visibility, high availability monitoring, and co
 
 ## Labs
 
+### ✅ Ready to run
+
+| Lab | Stack | Description |
+|-----|-------|-------------|
+| [prometheus-grafana](./prometheus-grafana/) | kube-prometheus-stack | Prometheus + Grafana + AlertManager fully in-cluster — open-source only |
+| [adot-amp-grafana](./adot-amp-grafana/) | ADOT + AMP + Grafana | AWS managed Prometheus, ADOT collector, Grafana with SigV4 auth |
+
+### Planned (EKS Workshop modules)
+
 | Lab | Description |
-|---|---|
+|-----|-------------|
 | container-insights | CloudWatch Container Insights — metrics and dashboards for EKS |
 | logging/pod-logging | Fluent Bit DaemonSet shipping pod logs to CloudWatch |
 | logging/cluster-logging | EKS control plane log collection and analysis |
-| open-source-metrics | Amazon Managed Prometheus (AMP) + Managed Grafana (AMG) |
 | opensearch | Log analytics pipeline into OpenSearch Service |
 | resource-view | EKS console resource view — workloads, nodes, and configuration |
 | high-availability | Monitoring cluster and workload availability patterns |
