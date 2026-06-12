@@ -147,10 +147,13 @@ In Grafana → **Dashboards** → **Browse**. Pre-loaded dashboards include:
 
 **Try this:** Scale a deployment and watch CPU spike in real time.
 
+> ⚠️ **Auto Mode note:** CoreDNS is managed as an EKS add-on and is not a scalable deployment.
+> Use `kube-state-metrics` instead — it's lightweight and shows up cleanly in the dashboards.
+
 ```bash
-kubectl scale deployment -n kube-system coredns --replicas=4
-# Watch dashboard refresh (default: 30s interval)
-kubectl scale deployment -n kube-system coredns --replicas=2
+kubectl scale deployment -n monitoring kube-prometheus-stack-kube-state-metrics --replicas=3
+# Watch dashboard refresh (default: 30s interval) — use Kubernetes / Compute Resources / Namespace (Pods), namespace: monitoring
+kubectl scale deployment -n monitoring kube-prometheus-stack-kube-state-metrics --replicas=1
 ```
 
 **Prometheus direct query:**
@@ -165,31 +168,45 @@ Open: http://localhost:9090 → try query: `sum(rate(container_cpu_usage_seconds
 
 ## STEP 8 (Optional) — Expose Grafana externally via NLB
 
-> Requires LBC installed. On MNG: already done in STEP 2 addon. On Auto Mode: built-in LBC handles it.
+> ⚠️ **Auto Mode vs Managed Node Group behave differently here — follow your cluster type.**
+
+### Option A — Managed Node Group
+
+The patch approach works because Helm LBC is running:
 
 ```bash
 kubectl patch svc kube-prometheus-stack-grafana -n monitoring \
   -p '{"spec":{"type":"LoadBalancer"},"metadata":{"annotations":{"service.beta.kubernetes.io/aws-load-balancer-type":"external","service.beta.kubernetes.io/aws-load-balancer-scheme":"internet-facing","service.beta.kubernetes.io/aws-load-balancer-nlb-target-type":"instance"}}}'
 
 kubectl get svc -n monitoring kube-prometheus-stack-grafana -w
-# Once EXTERNAL-IP appears:
+```
+
+### Option B — Auto Mode
+
+The built-in LBC only fires on service **creation**, not patch. Skip the patch — go straight to delete + helm upgrade:
+
+```bash
+kubectl delete svc kube-prometheus-stack-grafana -n monitoring
+
+helm upgrade kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+  -n monitoring --reuse-values \
+  --set grafana.service.type=LoadBalancer \
+  --set grafana.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-type"=external \
+  --set grafana.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-scheme"=internet-facing \
+  --set grafana.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-nlb-target-type"=instance
+
+kubectl get svc -n monitoring kube-prometheus-stack-grafana -w
+```
+
+### Once EXTERNAL-IP appears (both options)
+
+```bash
 export GRAFANA_URL=$(kubectl get svc -n monitoring kube-prometheus-stack-grafana \
   -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
 echo "Grafana URL: http://${GRAFANA_URL}"
 ```
 
-> ⚠️ **Auto Mode gotcha:** If the service doesn't get an NLB, delete and recreate it:
-> ```bash
-> kubectl delete svc kube-prometheus-stack-grafana -n monitoring
-> helm upgrade kube-prometheus-stack prometheus-community/kube-prometheus-stack \
->   -n monitoring --reuse-values \
->   --set grafana.service.type=LoadBalancer \
->   --set grafana.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-type"=external \
->   --set grafana.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-scheme"=internet-facing \
->   --set grafana.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-nlb-target-type"=instance
-> ```
-
-**To revert to ClusterIP:**
+**To revert to ClusterIP before teardown:**
 ```bash
 kubectl patch svc kube-prometheus-stack-grafana -n monitoring \
   -p '{"spec":{"type":"ClusterIP"}}'
