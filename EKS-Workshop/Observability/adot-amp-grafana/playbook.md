@@ -82,8 +82,9 @@ jq --version               # jq-1.7+
 
 aws sts get-caller-identity
 
-# Install awscurl if needed (used to query AMP directly)
-pip3 install awscurl
+# Install awscurl if needed — only used in STEP 7 (optional AMP direct query)
+# pipx is the correct installer on macOS (pip3 install will fail)
+pipx install awscurl   # install pipx first if needed: brew install pipx
 ```
 
 ---
