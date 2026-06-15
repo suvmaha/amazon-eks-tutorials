@@ -18,6 +18,8 @@ Every lab runs against a real cluster, produces real output, and explains what's
 
 ## Certified
 
+[↑ Contents](#contents)
+
 > **✅ Certified** = ran end-to-end on a real cluster; result documented in the playbook Run Log.
 
 | Lab | Folder | Date | Cluster |
@@ -30,6 +32,8 @@ Every lab runs against a real cluster, produces real output, and explains what's
 ---
 
 ## EKS Workshop
+
+[↑ Contents](#contents)
 
 Mirrors the official [Amazon EKS Workshop](https://www.eksworkshop.com/) with full transparency — every step is explicit, every script is readable.
 
@@ -136,6 +140,8 @@ Both destroy scripts run a cost check automatically as the final step.
 ---
 
 ## Tutorials
+
+[↑ Contents](#contents)
 
 Standalone tutorials organized by track. Each lives in [`tutorials/`](tutorials/) and runs independently.
 
@@ -259,6 +265,8 @@ Standalone tutorials organized by track. Each lives in [`tutorials/`](tutorials/
 
 ## CI/CD and Pipelines
 
+[↑ Contents](#contents)
+
 End-to-end delivery lifecycle tutorials in [`cicd-and-pipelines/`](cicd-and-pipelines/).
 
 | Folder | What You'll Learn | Status |
@@ -273,6 +281,8 @@ End-to-end delivery lifecycle tutorials in [`cicd-and-pipelines/`](cicd-and-pipe
 ---
 
 ## Sample Apps
+
+[↑ Contents](#contents)
 
 Reference applications used across labs in [`apps/`](apps/).
 
