@@ -264,8 +264,8 @@ End-to-end delivery lifecycle tutorials in [`cicd-and-pipelines/`](cicd-and-pipe
 
 Reference applications used across labs in [`apps/`](apps/).
 
-| App | Description |
-|-----|-------------|
-| [`retail-store/`](apps/retail-store/) | Multi-service retail app — standard EKS Workshop reference workload |
-| [`online-boutique/`](apps/online-boutique/) | Google's microservices demo — 11 services, good for mesh and tracing labs |
-| [`bookinfo/`](apps/bookinfo/) | Istio's classic sample app — good for traffic routing and A/B testing labs |
+| App | Description | Status |
+|-----|-------------|--------|
+| [`retail-store/`](apps/retail-store/) | Multi-service retail app — standard EKS Workshop reference workload (UI, catalog, cart, checkout, orders) | ✅ Certified — deployed via ArgoCD App of Apps (2026-06-10) |
+| [`online-boutique/`](apps/online-boutique/) | Google's microservices demo — 11 services, good for mesh and tracing labs | planned |
+| [`bookinfo/`](apps/bookinfo/) | Istio's classic sample app — good for traffic routing and A/B testing labs | planned |
