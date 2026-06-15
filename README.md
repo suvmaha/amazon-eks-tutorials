@@ -8,12 +8,24 @@ Every lab runs against a real cluster, produces real output, and explains what's
 
 ## Contents
 
+- [Certified](#certified) — every lab that has been run end-to-end successfully
 - [EKS Workshop](#eks-workshop) — follows [eksworkshop.com](https://www.eksworkshop.com/), fully transparent (no `prepare-environment`)
 - [Tutorials](#tutorials) — standalone track-based series
 - [CI/CD and Pipelines](#cicd-and-pipelines) — end-to-end delivery lifecycle on EKS
 - [Sample Apps](#sample-apps) — reference applications used across labs
 
+---
+
+## Certified
+
 > **✅ Certified** = ran end-to-end on a real cluster; result documented in the playbook Run Log.
+
+| Lab | Folder | Date | Cluster |
+|-----|--------|------|---------|
+| GitOps — ArgoCD | [EKS-Workshop/Automation/gitops-argocd](EKS-Workshop/Automation/gitops-argocd/) | 2026-06-10 | Auto Mode EKS 1.35 |
+| kube-prometheus-stack + Grafana | [EKS-Workshop/Observability/prometheus-grafana](EKS-Workshop/Observability/prometheus-grafana/) | 2026-06-11 | Auto Mode EKS 1.35 |
+| ADOT + AMP + Grafana | [EKS-Workshop/Observability/adot-amp-grafana](EKS-Workshop/Observability/adot-amp-grafana/) | 2026-06-12 | Auto Mode EKS 1.35 |
+| Retail Store (via ArgoCD App of Apps) | [apps/retail-store](apps/retail-store/) | 2026-06-10 | Auto Mode EKS 1.35 |
 
 ---
 
