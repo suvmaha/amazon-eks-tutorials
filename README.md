@@ -78,6 +78,7 @@ Both destroy scripts run a cost check automatically as the final step.
 |-----|----------|--------|
 | kube-prometheus-stack + Grafana | [playbook.md](EKS-Workshop/Observability/prometheus-grafana/playbook.md) | ✅ Certified — Auto Mode EKS 1.35 (2026-06-11) |
 | ADOT + AMP + Grafana | [playbook.md](EKS-Workshop/Observability/adot-amp-grafana/playbook.md) | ✅ Certified — Auto Mode EKS 1.35 (2026-06-12) |
+| Kubecost — cost allocation and savings recommendations | [playbook.md](EKS-Workshop/Observability/kubecost/playbook.md) | not yet run |
 | CloudWatch Container Insights | coming | planned |
 | Fluent Bit log aggregation | coming | planned |
 
