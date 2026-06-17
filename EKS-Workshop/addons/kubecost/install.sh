@@ -22,14 +22,15 @@ echo ""
 echo "── STEP 1: Add Helm repo ────────────────────────────────────────────────────"
 helm repo add kubecost https://kubecost.github.io/cost-analyzer/ 2>/dev/null || true
 helm repo update kubecost
-CHART_VERSION=$(helm search repo kubecost/cost-analyzer --output json | jq -r '.[0].version')
-echo "  ✅  Repo ready. Latest chart version: ${CHART_VERSION}"
+CHART_VERSION="2.8.6"  # 2.9.x is a migration-only bridge to 3.0 — pin to last stable
+echo "  ✅  Repo ready. Pinned chart version: ${CHART_VERSION}"
 
 echo ""
 echo "── STEP 2: Install Kubecost ─────────────────────────────────────────────────"
 helm upgrade --install "${RELEASE_NAME}" kubecost/cost-analyzer \
     --namespace "${NAMESPACE}" \
     --create-namespace \
+    --version "${CHART_VERSION}" \
     --set global.clusterId="${EKS_CLUSTER_NAME}" \
     --wait --timeout 10m
 echo "  ✅  Kubecost installed (chart: ${CHART_VERSION})"
