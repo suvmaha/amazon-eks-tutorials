@@ -32,6 +32,8 @@ helm upgrade --install "${RELEASE_NAME}" kubecost/cost-analyzer \
     --create-namespace \
     --version "${CHART_VERSION}" \
     --set global.clusterId="${EKS_CLUSTER_NAME}" \
+    --set persistentVolume.enabled=false \
+    --set prometheus.server.persistentVolume.enabled=false \
     --wait --timeout 10m
 echo "  ✅  Kubecost installed (chart: ${CHART_VERSION})"
 
