@@ -30,6 +30,7 @@ echo "── STEP 2: Install Kubecost ──────────────
 helm upgrade --install "${RELEASE_NAME}" kubecost/cost-analyzer \
     --namespace "${NAMESPACE}" \
     --create-namespace \
+    --set global.clusterId="${EKS_CLUSTER_NAME}" \
     --wait --timeout 10m
 echo "  ✅  Kubecost installed (chart: ${CHART_VERSION})"
 
