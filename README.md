@@ -27,6 +27,7 @@ Every lab runs against a real cluster, produces real output, and explains what's
 | GitOps — ArgoCD | [EKS-Workshop/Automation/gitops-argocd](EKS-Workshop/Automation/gitops-argocd/) | 2026-06-10 | Auto Mode EKS 1.35 |
 | kube-prometheus-stack + Grafana | [EKS-Workshop/Observability/prometheus-grafana](EKS-Workshop/Observability/prometheus-grafana/) | 2026-06-11 | Auto Mode EKS 1.35 |
 | ADOT + AMP + Grafana | [EKS-Workshop/Observability/adot-amp-grafana](EKS-Workshop/Observability/adot-amp-grafana/) | 2026-06-12 | Auto Mode EKS 1.35 |
+| Kubecost — cost allocation and savings | [EKS-Workshop/Observability/kubecost](EKS-Workshop/Observability/kubecost/) | 2026-06-18 | Auto Mode EKS 1.35 |
 | Retail Store (via ArgoCD App of Apps) | [apps/retail-store](apps/retail-store/) | 2026-06-10 | Auto Mode EKS 1.35 |
 
 ---
@@ -78,7 +79,7 @@ Both destroy scripts run a cost check automatically as the final step.
 |-----|----------|--------|
 | kube-prometheus-stack + Grafana | [playbook.md](EKS-Workshop/Observability/prometheus-grafana/playbook.md) | ✅ Certified — Auto Mode EKS 1.35 (2026-06-11) |
 | ADOT + AMP + Grafana | [playbook.md](EKS-Workshop/Observability/adot-amp-grafana/playbook.md) | ✅ Certified — Auto Mode EKS 1.35 (2026-06-12) |
-| Kubecost — cost allocation and savings recommendations | [playbook.md](EKS-Workshop/Observability/kubecost/playbook.md) | not yet run |
+| Kubecost — cost allocation and savings recommendations | [playbook.md](EKS-Workshop/Observability/kubecost/playbook.md) | ✅ Certified — Auto Mode EKS 1.35 (2026-06-18) |
 | CloudWatch Container Insights | coming | planned |
 | Fluent Bit log aggregation | coming | planned |
 

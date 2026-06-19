@@ -12,7 +12,7 @@ deployment, and review savings recommendations — all from the Kubecost UI.
 
 | Date | Cluster Type | Result |
 |------|-------------|--------|
-| | | |
+| 2026-06-18 | Auto Mode (EKS 1.35) | ✅ Certified — ran end-to-end successfully |
 
 ---
 
