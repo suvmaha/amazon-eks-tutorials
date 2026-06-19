@@ -48,7 +48,7 @@ MLFLOW_POD=$(kubectl get pod -n "${NAMESPACE}" -l "app.kubernetes.io/name=mlflow
     || echo "  ❌  MLflow pod not found"
 
 echo ""
-echo "  Access UI:  kubectl port-forward -n mlflow svc/mlflow 5000:5000"
+echo "  Access UI:  kubectl port-forward -n mlflow svc/mlflow 5000:80"
 echo "  Open:       http://localhost:5000"
 echo ""
 echo "⏱  Started : ${START}"

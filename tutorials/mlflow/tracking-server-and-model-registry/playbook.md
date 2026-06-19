@@ -127,7 +127,7 @@ mlflow-...             1/1     Running   0          30s
 ## STEP 6 — Access MLflow UI (port-forward)
 
 ```bash
-kubectl port-forward -n mlflow svc/mlflow 5000:5000
+kubectl port-forward -n mlflow svc/mlflow 5000:80
 ```
 
 Open: http://localhost:5000
