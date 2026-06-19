@@ -4,7 +4,7 @@ End-to-end guide: deploy **Kubecost** on EKS, explore cost allocation by namespa
 deployment, and review savings recommendations — all from the Kubecost UI.
 
 **Stack:** Kubecost Free tier (1 cluster, unlimited nodes) — no token required.
-**Estimated time:** ~30 minutes (cluster ~15 min + install ~5 min + exploration ~10 min)
+**Estimated time:** ~1 hour (cluster ~15 min + install ~5 min + 25 min data warm-up + exploration ~15 min)
 
 ---
 
@@ -94,7 +94,8 @@ ${REPO_ROOT}/EKS-Workshop/cluster/auto-mode/create.sh
 
 ## STEP 5 — Install Kubecost
 
-Installs the Kubecost cost-analyzer with its bundled Prometheus. No token required for the Free tier.
+Installs the Kubecost cost-analyzer with its bundled Prometheus and an IRSA service account
+for AWS API access. No token required for the Free tier.
 → [install.sh](../../addons/kubecost/install.sh)
 
 ```bash
@@ -103,25 +104,41 @@ ${REPO_ROOT}/EKS-Workshop/addons/kubecost/install.sh
 
 Expected output:
 ```
-── Install: Kubecost ───────────────────────────────────────────────────────
-   Cluster: eks-workshop | Region: us-east-1
+── Pre-flight checks ───────────────────────────────────────────────────────
+  ✅  Cluster 'eks-workshop' is ACTIVE
+  ✅  OIDC provider configured
+  ✅  helm available
 
-── STEP 1: Add Helm repo ────────────────────────────────────────────────────
-  ✅  Repo ready. Latest chart version: x.x.x
+── STEP 1: Create IAM policy ───────────────────────────────────────────────
+  ✅  Created: KubecostIAMPolicy-eks-workshop
 
-── STEP 2: Install Kubecost ─────────────────────────────────────────────────
-  ✅  Kubecost installed (chart: x.x.x)
+── STEP 2: Create IRSA service account ─────────────────────────────────────
+  ✅  IRSA service account created: kubecost-cost-analyzer
 
-── STEP 3: Verify ───────────────────────────────────────────────────────────
+── STEP 3: Add Helm repo ────────────────────────────────────────────────────
+  ✅  Repo ready. Pinned chart version: 2.8.6
+
+── STEP 4: Install Kubecost ─────────────────────────────────────────────────
+  ✅  Kubecost installed (chart: 2.8.6)
+
+── STEP 5: Verify ───────────────────────────────────────────────────────────
 NAME                                          READY   STATUS    RESTARTS   AGE
-kubecost-cost-analyzer-...                    2/2     Running   0          60s
+kubecost-cost-analyzer-...                    4/4     Running   0          60s
 kubecost-prometheus-server-...                1/1     Running   0          60s
 
   ✅  Kubecost running: pod/kubecost-cost-analyzer-...
 ```
 
-> Kubecost takes ~2 minutes after install to collect initial metrics from the cluster.
-> Cost data will appear once the first scrape cycle completes.
+> **Data takes ~25 minutes to appear** — this is Kubecost's own estimate from the install output.
+> A progress indicator appears at the top of the Overview page while data is loading.
+> Once gone, the dashboard is fully populated.
+>
+> **What IRSA unlocks:**
+> - Cloud insights in the Savings tab (Reserved instances, Orphaned resources, Spot Commander)
+> - Accurate AWS on-demand pricing via `pricing:GetProducts`
+>
+> Without IRSA, Cloud insight rows show "Explore savings" with no dollar amount.
+> Note: Cloud Costs Breakdown (billing data) requires a separate AWS CUR integration — IRSA alone is not enough.
 
 ---
 
@@ -140,53 +157,71 @@ Open: http://localhost:9090
 
 ## STEP 7 — Explore cost dashboard
 
-### Cost Allocation by namespace
+In Kubecost 2.8.6 the **Overview page is the main dashboard** — there is no separate
+"Cost Allocation" item in the left sidebar. Everything below is on the Overview page
+you land on when the UI opens.
 
-**UI:** Allocations → Group by: Namespace
+### Top summary bar
 
-You should see all system namespaces broken down by estimated monthly cost:
+| Metric | What it means |
+|--------|--------------|
+| Kubernetes Costs | What your pods are consuming (CPU, RAM, storage) |
+| Total Costs | Kubernetes + any cloud costs (requires CUR integration) |
+| Possible Monthly Savings | Sum of all Savings recommendations |
+| Cluster Efficiency | % of requested resources actually being used — low = over-provisioned |
+
+On a fresh cluster expect to see `<$0.01` for costs and ~2% efficiency
+(only system pods running, no real workloads).
+
+### Namespace breakdown
+
+Scroll down on the Overview page to **Namespace Breakdown**.
+On a fresh cluster you'll see two namespaces:
 
 | Namespace | What's running |
 |-----------|---------------|
-| `kube-system` | CoreDNS, VPC CNI, kube-proxy |
 | `kubecost` | Kubecost itself |
-| `default` | Any workloads you deployed |
+| `kube-system` | CoreDNS, VPC CNI, kube-proxy |
 
-> On a fresh cluster with no workloads, costs are estimated from node resource requests
-> and AWS on-demand pricing. Numbers become more accurate over time.
+### Cluster Efficiency chart
+
+Also on the Overview page — shows CPU, RAM, and Storage broken into:
+- **Usage** (green) — what pods are actually consuming
+- **Allocation** (light green) — what pods requested
+- **Idle** (grey) — what's provisioned but unused
+
+Low Usage vs Allocation = over-provisioned pods. Low Allocation vs total node = idle node capacity.
 
 ### Savings recommendations
 
-**UI:** Savings
+**UI:** Left sidebar → **Savings**
 
-Kubecost scans your cluster and surfaces:
+Kubernetes insights populate within ~25 minutes and show dollar amounts.
+Cloud insights (Reserved instances, Orphaned resources, Spot Commander) require
+AWS CUR billing integration beyond IRSA — they show "Explore savings" without amounts until configured.
 
-| Recommendation | What it means |
-|---------------|---------------|
-| Right-size containers | Pods requesting more CPU/memory than they use |
-| Cluster right-sizing | Nodes larger than needed for current workloads |
-| Reserved instance opportunities | On-demand nodes that would save money on Reserved |
-| Abandoned workloads | Pods running with zero traffic |
+### Cloud Costs Breakdown (empty — expected)
 
-### Efficiency score
+The **Cloud Costs Breakdown** section on the Overview page shows:
+> "Integrate with your cloud provider to see non-Kubernetes costs."
 
-**UI:** Overview → Efficiency
+This needs AWS Cost and Usage Report (CUR) set up and linked to Kubecost — out of scope for this lab.
 
-Shows CPU and memory efficiency per namespace — what fraction of requested resources are
-actually being used. Low efficiency = over-provisioned pods = wasted spend.
+### Network Costs (empty — expected)
+
+Requires the **Network Costs DaemonSet** — not installed in this lab. Out of scope.
 
 ### Deploy a workload and watch costs update
 
 ```bash
-# Deploy a sample workload to see cost allocation per deployment
 kubectl create deployment nginx --image=nginx --replicas=3
 kubectl set resources deployment nginx \
   --requests=cpu=100m,memory=128Mi \
   --limits=cpu=200m,memory=256Mi
-
-# Wait ~2 minutes, then check Allocations in Kubecost UI
-# Group by: Deployment — you should see nginx appear with estimated cost
 ```
+
+Wait ~5 minutes, then refresh the Overview page. The `default` namespace should appear
+in the Namespace Breakdown with an estimated cost.
 
 Clean up:
 ```bash
@@ -245,6 +280,11 @@ kubectl patch svc kubecost-cost-analyzer -n kubecost \
 
 ## STEP 9 — Tear Down
 
+**Estimate session cost before teardown:**
+```bash
+${REPO_ROOT}/EKS-Workshop/scripts/session-cost.sh
+```
+
 **Remove Kubecost:**
 → [uninstall.sh](../../addons/kubecost/uninstall.sh)
 
@@ -266,4 +306,9 @@ If you created an Auto Mode cluster:
 ${REPO_ROOT}/EKS-Workshop/cluster/auto-mode/destroy.sh
 ```
 
-Cost check runs automatically at the end of the destroy script.
+**Run cost check to confirm clean teardown:**
+```bash
+${REPO_ROOT}/EKS-Workshop/scripts/cost-check.sh
+```
+
+> The destroy script does not run the cost check automatically — run it manually after teardown.

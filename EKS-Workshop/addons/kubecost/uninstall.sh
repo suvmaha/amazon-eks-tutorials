@@ -1,12 +1,17 @@
 #!/usr/bin/env bash
-# uninstall.sh — Remove Kubecost
+# uninstall.sh — Remove Kubecost and clean up IAM resources
 
 set -euo pipefail
 
 export EKS_CLUSTER_NAME="${EKS_CLUSTER_NAME:-eks-workshop}"
 export AWS_REGION="${AWS_REGION:-us-east-1}"
+export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --output text --query 'Account')
+
 NAMESPACE="kubecost"
 RELEASE_NAME="kubecost"
+SA_NAME="kubecost-cost-analyzer"
+POLICY_NAME="KubecostIAMPolicy-${EKS_CLUSTER_NAME}"
+POLICY_ARN="arn:aws:iam::${AWS_ACCOUNT_ID}:policy/${POLICY_NAME}"
 
 echo ""
 echo "── Remove: Kubecost ────────────────────────────────────────────────────────"
@@ -26,9 +31,42 @@ else
 fi
 
 echo ""
-echo "── STEP 2: Delete namespace ─────────────────────────────────────────────────"
+echo "── STEP 2: Delete IRSA service account ─────────────────────────────────────"
+if eksctl get iamserviceaccount \
+    --cluster "${EKS_CLUSTER_NAME}" \
+    --region "${AWS_REGION}" \
+    --namespace "${NAMESPACE}" \
+    --name "${SA_NAME}" &>/dev/null 2>&1; then
+    eksctl delete iamserviceaccount \
+        --cluster "${EKS_CLUSTER_NAME}" \
+        --region "${AWS_REGION}" \
+        --namespace "${NAMESPACE}" \
+        --name "${SA_NAME}"
+    echo "  ✅  IRSA service account deleted."
+else
+    echo "  IRSA service account not found — skipping."
+fi
+
+echo ""
+echo "── STEP 3: Delete namespace ─────────────────────────────────────────────────"
 kubectl delete namespace "${NAMESPACE}" --ignore-not-found=true
 echo "  ✅  Namespace deleted."
+
+echo ""
+echo "── STEP 4: Delete IAM policy ───────────────────────────────────────────────"
+if aws iam get-policy --policy-arn "${POLICY_ARN}" &>/dev/null; then
+    # Detach from all entities before deleting
+    aws iam list-entities-for-policy --policy-arn "${POLICY_ARN}" \
+        --query 'PolicyRoles[].RoleName' --output text 2>/dev/null \
+        | tr '\t' '\n' | grep -v '^$' \
+        | while read -r ROLE; do
+            aws iam detach-role-policy --role-name "${ROLE}" --policy-arn "${POLICY_ARN}" 2>/dev/null || true
+          done
+    aws iam delete-policy --policy-arn "${POLICY_ARN}"
+    echo "  ✅  IAM policy deleted: ${POLICY_NAME}"
+else
+    echo "  IAM policy not found — skipping."
+fi
 
 echo ""
 echo "── Final check ─────────────────────────────────────────────────────────────"
