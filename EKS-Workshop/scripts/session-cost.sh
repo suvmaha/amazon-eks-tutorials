@@ -122,19 +122,11 @@ NODES=$(aws ec2 describe-instances \
     --output text 2>/dev/null || echo "")
 
 if [[ -z "${NODES}" ]]; then
-    # Auto Mode fallback: derive instance type + launch time from kubectl node labels/metadata
-    NODES=$(kubectl get nodes -o json 2>/dev/null | python3 - <<'PYEOF'
-import json, sys
-data = json.load(sys.stdin)
-for node in data.get("items", []):
-    labels = node.get("metadata", {}).get("labels", {})
-    itype = labels.get("node.kubernetes.io/instance-type", "")
-    created = node.get("metadata", {}).get("creationTimestamp", "")
-    iid = node.get("metadata", {}).get("name", "")
-    if itype and created:
-        print(f"{itype}\t{created}\t{iid}")
-PYEOF
-)
+    # Auto Mode fallback: EC2 instances are managed by the EKS service principal
+    # and don't appear in describe-instances scans. Read from kubectl instead.
+    NODES=$(kubectl get nodes \
+        -o jsonpath='{range .items[*]}{.metadata.labels.node\.kubernetes\.io/instance-type}{"\t"}{.metadata.creationTimestamp}{"\t"}{.metadata.name}{"\n"}{end}' \
+        2>/dev/null || echo "")
 fi
 
 if [[ -z "${NODES}" ]]; then
