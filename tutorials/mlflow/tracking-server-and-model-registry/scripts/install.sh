@@ -30,6 +30,8 @@ echo "── STEP 2: Install MLflow ──────────────�
 helm upgrade --install "${RELEASE_NAME}" community-charts/mlflow \
     --namespace "${NAMESPACE}" \
     --create-namespace \
+    --set backendStore.defaultSqlitePath=/tmp/mlflow.db \
+    --set backendStore.databaseMigration=true \
     --wait --timeout 5m
 echo "  ✅  MLflow installed (chart: ${CHART_VERSION})"
 
