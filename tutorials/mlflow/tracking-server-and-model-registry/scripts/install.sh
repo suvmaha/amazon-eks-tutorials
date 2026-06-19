@@ -32,6 +32,8 @@ helm upgrade --install "${RELEASE_NAME}" community-charts/mlflow \
     --create-namespace \
     --set backendStore.defaultSqlitePath=/tmp/mlflow.db \
     --set backendStore.databaseMigration=true \
+    --set artifactRoot.proxiedArtifactStorage=true \
+    --set artifactRoot.defaultArtifactRoot=/tmp/mlruns \
     --wait --timeout 5m
 echo "  ✅  MLflow installed (chart: ${CHART_VERSION})"
 
