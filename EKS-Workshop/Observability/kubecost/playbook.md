@@ -140,6 +140,51 @@ kubecost-prometheus-server-...                1/1     Running   0          60s
 > Without IRSA, Cloud insight rows show "Explore savings" with no dollar amount.
 > Note: Cloud Costs Breakdown (billing data) requires a separate AWS CUR integration — IRSA alone is not enough.
 
+### What's in the cluster at this point
+
+```bash
+kubectl get ns
+helm list -A
+kubectl get pods -A
+```
+
+```
+| Component                    | Namespace   | Type                    | Notes                                          |
+|------------------------------|-------------|-------------------------|------------------------------------------------|
+| EKS Auto Mode control plane  | —           | AWS-managed             | Kubernetes 1.35                                |
+| metrics-server               | kube-system | System pod              | Provides CPU/memory metrics to Kubernetes      |
+| Kubecost cost-analyzer       | kubecost    | Helm (cost-analyzer-2.8.6) | Core engine — cost allocation, savings, UI  |
+| Kubecost forecasting         | kubecost    | Helm                    | Cost forecasting service                       |
+| Kubecost Grafana             | kubecost    | Helm                    | Bundled Grafana for dashboards                 |
+| Kubecost Prometheus          | kubecost    | Helm                    | Bundled Prometheus — scrapes cluster metrics   |
+| IRSA service account         | kubecost    | IAM + k8s SA            | Grants Kubecost AWS API access                 |
+```
+
+No application workloads yet — only system and observability components.
+
+#### Why does Kubecost bundle Prometheus and Grafana?
+
+Kubecost needs time-series metrics to calculate cost allocation. Rather than requiring
+you to have Prometheus already running, the Helm chart bundles its own Prometheus that
+it fully controls. Same with Grafana — Kubecost ships pre-configured dashboards out of
+the box.
+
+| | Bundled (what we have) | Bring your own |
+|---|---|---|
+| Setup | Zero config | Manual integration |
+| Isolation | Kubecost has its own stack | Shared with other tools |
+| Duplication | Yes — if Prometheus already exists | No |
+| Production use | Fine for single-purpose installs | Preferred in mature clusters |
+
+In a production cluster you'd likely already have a Prometheus + Grafana stack (e.g.
+from `kube-prometheus-stack`). In that case you'd configure Kubecost to point at your
+existing Prometheus instead of bundling its own — saves resources and avoids two
+Prometheus instances scraping the same cluster.
+
+That's what the next observability tutorial covers — `prometheus-grafana/` is in the
+same folder. Once you have that running, you can integrate it with Kubecost and
+decommission the bundled stack.
+
 ---
 
 ## STEP 6 — Access Kubecost UI (port-forward)
