@@ -27,6 +27,9 @@ instance_price() {
         c6g.medium)   echo "0.0340" ;;  c6g.large)    echo "0.0680" ;;
         c6g.xlarge)   echo "0.1360" ;;  c6g.2xlarge)  echo "0.2720" ;;
         c6g.4xlarge)  echo "0.5440" ;;
+        # c6a (AMD)
+        c6a.large)    echo "0.0765" ;;  c6a.xlarge)   echo "0.1530" ;;
+        c6a.2xlarge)  echo "0.3060" ;;
         # c6i (Intel)
         c6i.large)    echo "0.0850" ;;  c6i.xlarge)   echo "0.1700" ;;
         c6i.2xlarge)  echo "0.3400" ;;
@@ -110,7 +113,7 @@ header "EC2 nodes  (per instance type)"
 NODES=$(aws ec2 describe-instances \
     --region "${REGION}" \
     --filters "Name=instance-state-name,Values=running,pending" \
-              "Name=tag:eks:cluster-name,Values=${CLUSTER_NAME}" \
+              "Name=tag:kubernetes.io/cluster/${CLUSTER_NAME},Values=owned" \
     --query "Reservations[].Instances[].[InstanceType,LaunchTime,InstanceId]" \
     --output text 2>/dev/null || echo "")
 

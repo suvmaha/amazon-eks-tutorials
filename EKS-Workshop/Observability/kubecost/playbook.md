@@ -112,14 +112,14 @@ Expected output:
 ── STEP 1: Create IAM policy ───────────────────────────────────────────────
   ✅  Created: KubecostIAMPolicy-eks-workshop
 
-── STEP 2: Create IRSA service account ─────────────────────────────────────
-  ✅  IRSA service account created: kubecost-cost-analyzer
-
-── STEP 3: Add Helm repo ────────────────────────────────────────────────────
+── STEP 2: Add Helm repo ────────────────────────────────────────────────────
   ✅  Repo ready. Pinned chart version: 2.8.6
 
-── STEP 4: Install Kubecost ─────────────────────────────────────────────────
+── STEP 3: Install Kubecost ─────────────────────────────────────────────────
   ✅  Kubecost installed (chart: 2.8.6)
+
+── STEP 4: Attach IRSA annotation to service account ───────────────────────
+  ✅  IRSA annotation attached: kubecost-cost-analyzer
 
 ── STEP 5: Verify ───────────────────────────────────────────────────────────
 NAME                                          READY   STATUS    RESTARTS   AGE
@@ -301,8 +301,6 @@ helm upgrade kubecost kubecost/cost-analyzer \
   --set kubecostProductConfigs.clusterName="${EKS_CLUSTER_NAME}" \
   --set persistentVolume.enabled=false \
   --set prometheus.server.persistentVolume.enabled=false \
-  --set serviceAccount.create=false \
-  --set serviceAccount.name=kubecost-cost-analyzer \
   --set service.type=LoadBalancer \
   --set "service.annotations.service\.beta\.kubernetes\.io/aws-load-balancer-type=external" \
   --set "service.annotations.service\.beta\.kubernetes\.io/aws-load-balancer-scheme=internet-facing" \
@@ -311,6 +309,11 @@ helm upgrade kubecost kubecost/cost-analyzer \
 
 kubectl get svc -n kubecost kubecost-cost-analyzer -w
 ```
+
+> ⚠️ **Do not add `--set serviceAccount.create=false` to any `helm upgrade` command.**
+> Kubecost's ClusterRole and ClusterRoleBinding are conditioned on `serviceAccount.create=true`.
+> Setting it false on an upgrade removes those RBAC resources, leaving the aggregator
+> unable to list ConfigMaps — CrashLoopBackOff with `Unauthorized` errors.
 
 ### Once EXTERNAL-IP appears (both options)
 

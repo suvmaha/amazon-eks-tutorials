@@ -68,8 +68,28 @@ else
 fi
 
 echo ""
-echo "── STEP 2: Create IRSA service account ─────────────────────────────────────"
-kubectl create namespace "${NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
+echo "── STEP 2: Add Helm repo ────────────────────────────────────────────────────"
+helm repo add kubecost https://kubecost.github.io/cost-analyzer/ 2>/dev/null || true
+helm repo update kubecost
+echo "  ✅  Repo ready. Pinned chart version: ${CHART_VERSION}"
+
+echo ""
+echo "── STEP 3: Install Kubecost ─────────────────────────────────────────────────"
+# helm creates the SA and its ClusterRole/ClusterRoleBinding here.
+# IRSA annotation is added in the next step via eksctl --override-existing-serviceaccounts.
+helm upgrade --install "${RELEASE_NAME}" kubecost/cost-analyzer \
+    --namespace "${NAMESPACE}" \
+    --create-namespace \
+    --version "${CHART_VERSION}" \
+    --set kubecostProductConfigs.clusterName="${EKS_CLUSTER_NAME}" \
+    --set persistentVolume.enabled=false \
+    --set prometheus.server.persistentVolume.enabled=false \
+    --wait --timeout 10m
+echo "  ✅  Kubecost installed (chart: ${CHART_VERSION})"
+
+echo ""
+echo "── STEP 4: Attach IRSA annotation to service account ───────────────────────"
+# eksctl annotates the SA that helm just created, preserving its RBAC resources.
 eksctl create iamserviceaccount \
     --cluster "${EKS_CLUSTER_NAME}" \
     --region "${AWS_REGION}" \
@@ -78,27 +98,7 @@ eksctl create iamserviceaccount \
     --attach-policy-arn "${POLICY_ARN}" \
     --approve \
     --override-existing-serviceaccounts
-echo "  ✅  IRSA service account created: ${SA_NAME}"
-
-echo ""
-echo "── STEP 3: Add Helm repo ────────────────────────────────────────────────────"
-helm repo add kubecost https://kubecost.github.io/cost-analyzer/ 2>/dev/null || true
-helm repo update kubecost
-echo "  ✅  Repo ready. Pinned chart version: ${CHART_VERSION}"
-
-echo ""
-echo "── STEP 4: Install Kubecost ─────────────────────────────────────────────────"
-helm upgrade --install "${RELEASE_NAME}" kubecost/cost-analyzer \
-    --namespace "${NAMESPACE}" \
-    --create-namespace \
-    --version "${CHART_VERSION}" \
-    --set kubecostProductConfigs.clusterName="${EKS_CLUSTER_NAME}" \
-    --set serviceAccount.create=false \
-    --set serviceAccount.name="${SA_NAME}" \
-    --set persistentVolume.enabled=false \
-    --set prometheus.server.persistentVolume.enabled=false \
-    --wait --timeout 10m
-echo "  ✅  Kubecost installed (chart: ${CHART_VERSION})"
+echo "  ✅  IRSA annotation attached: ${SA_NAME}"
 
 echo ""
 echo "── STEP 5: Verify ───────────────────────────────────────────────────────────"
