@@ -297,11 +297,16 @@ kubectl delete svc kubecost-cost-analyzer -n kubecost
 
 helm upgrade kubecost kubecost/cost-analyzer \
   --namespace kubecost \
-  --reuse-values \
+  --version 2.8.6 \
+  --set kubecostProductConfigs.clusterName="${EKS_CLUSTER_NAME}" \
+  --set persistentVolume.enabled=false \
+  --set prometheus.server.persistentVolume.enabled=false \
+  --set serviceAccount.create=false \
+  --set serviceAccount.name=kubecost-cost-analyzer \
   --set service.type=LoadBalancer \
-  --set "service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-type=external" \
-  --set "service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-scheme=internet-facing" \
-  --set "service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-nlb-target-type=instance" \
+  --set "service.annotations.service\.beta\.kubernetes\.io/aws-load-balancer-type=external" \
+  --set "service.annotations.service\.beta\.kubernetes\.io/aws-load-balancer-scheme=internet-facing" \
+  --set "service.annotations.service\.beta\.kubernetes\.io/aws-load-balancer-nlb-target-type=instance" \
   --wait --timeout 5m
 
 kubectl get svc -n kubecost kubecost-cost-analyzer -w
