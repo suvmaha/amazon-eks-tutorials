@@ -4,6 +4,8 @@ log-experiment.py
 Logs a training run to MLflow and registers the resulting model.
 Requires: pip install mlflow scikit-learn
 MLflow UI must be port-forwarded on localhost:5000 before running.
+
+Compatible with MLflow 3.x (artifact_path replaced by name).
 """
 
 import mlflow
@@ -28,20 +30,24 @@ model.fit(X, y)
 accuracy = model.score(X, y)
 
 with mlflow.start_run() as run:
+    run_id = run.info.run_id
     mlflow.log_params(params)
     mlflow.log_metric("accuracy", round(accuracy, 4))
 
     mlflow.sklearn.log_model(
         model,
-        artifact_path="model",
-        registered_model_name=MODEL_NAME,
+        name="model",
     )
 
-    print(f"Run ID: {run.info.run_id}")
+    print(f"Run ID: {run_id}")
     print(f"  logged param  C = {params['C']}")
     print(f"  logged param  max_iter = {params['max_iter']}")
     print(f"  logged metric accuracy = {round(accuracy, 4)}")
-    print(f"  registered model: {MODEL_NAME} (Version 1)")
+
+# Register the model separately (MLflow 3.x pattern)
+model_uri = f"runs:/{run_id}/model"
+mv = mlflow.register_model(model_uri, MODEL_NAME)
+print(f"  registered model: {MODEL_NAME} (Version {mv.version})")
 
 print(f"✅  Done. Open http://localhost:5000 to see the run.")
-print(f"    Go to Models → {MODEL_NAME} → Version 1 → promote to Production.")
+print(f"    Go to Models → {MODEL_NAME} → Version {mv.version} → promote to Production.")
