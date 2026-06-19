@@ -28,6 +28,7 @@ Every lab runs against a real cluster, produces real output, and explains what's
 | kube-prometheus-stack + Grafana | [EKS-Workshop/Observability/prometheus-grafana](EKS-Workshop/Observability/prometheus-grafana/) | 2026-06-11 | Auto Mode EKS 1.35 |
 | ADOT + AMP + Grafana | [EKS-Workshop/Observability/adot-amp-grafana](EKS-Workshop/Observability/adot-amp-grafana/) | 2026-06-12 | Auto Mode EKS 1.35 |
 | Kubecost — cost allocation and savings | [EKS-Workshop/Observability/kubecost](EKS-Workshop/Observability/kubecost/) | 2026-06-18 | Auto Mode EKS 1.35 |
+| MLflow — experiment tracking and model registry | [tutorials/mlflow/tracking-server-and-model-registry](tutorials/mlflow/tracking-server-and-model-registry/) | 2026-06-18 | Auto Mode EKS 1.35 |
 | Retail Store (via ArgoCD App of Apps) | [apps/retail-store](apps/retail-store/) | 2026-06-10 | Auto Mode EKS 1.35 |
 
 ---
@@ -246,7 +247,8 @@ Standalone tutorials organized by track. Each lives in [`tutorials/`](tutorials/
 | Spark on EKS | planned |
 | Volcano batch scheduler | planned |
 | Karpenter for GPU workloads | planned |
-| MLflow on EKS — experiment tracking and model registry | planned |
+| MLflow on EKS — experiment tracking and model registry | [tracking-server-and-model-registry](tutorials/mlflow/tracking-server-and-model-registry/) | ✅ Certified — Auto Mode EKS 1.35 (2026-06-18) |
+| Ray Serve — model serving from MLflow registry | [model-serving-from-mlflow](tutorials/ray-serve/model-serving-from-mlflow/) | planned |
 
 ### Track 10 — Advanced Topics
 

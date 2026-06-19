@@ -12,7 +12,7 @@ and promote it to PRODUCTION — the full model lifecycle in one lab.
 
 | Date | Cluster Type | Result |
 |------|-------------|--------|
-| | | |
+| 2026-06-18 | Auto Mode (EKS 1.35) | ✅ Certified — ran end-to-end successfully |
 
 ---
 
@@ -204,6 +204,75 @@ Expected:
 ```
 Model: iris-classifier  Version: 1  Alias: production
 ```
+
+### Running more experiments
+
+Each training run with different hyperparams produces a new version. You accumulate
+v1, v2, v3 — then move aliases between them as versions improve:
+
+```python
+# Next run: try C=1.0
+params = {"C": 1.0, "max_iter": 200}
+# ... train, log, register → iris-classifier Version 2
+# If accuracy improves, move the alias:
+client.set_registered_model_alias("iris-classifier", "production", "2")
+```
+
+Common alias conventions:
+
+| Alias | Meaning |
+|-------|---------|
+| `@candidate` | Just trained, awaiting evaluation |
+| `@staging` | Passed offline eval, in integration testing |
+| `@production` | Serving live traffic |
+| `@champion` / `@challenger` | A/B testing — two versions serving simultaneously |
+
+You move the alias, not the model. Downstream serving code always loads
+`models:/iris-classifier@production` and automatically picks up whichever version
+currently holds that alias — no code change required on promotion.
+
+---
+
+### What's stored in the registry
+
+Per version, the registry stores:
+
+| Asset | What it is |
+|-------|-----------|
+| Serialized model | Actual weights/coefficients (pickle/joblib for sklearn) |
+| `MLmodel` file | Metadata: framework, Python version, input/output schema |
+| `requirements.txt` / `conda.yaml` | Exact package versions to reproduce the environment |
+| Run link | Traceable back to the params, metrics, and data used to train |
+
+You can load any version and get a reproducible inference environment — not just the weights.
+
+---
+
+### Where the registry connects to the rest of the stack
+
+**Model serving** — KServe, Ray Serve, Seldon, BentoML load by alias:
+```python
+model = mlflow.pyfunc.load_model("models:/iris-classifier@production")
+```
+The serving code never hardcodes a version. Promote v2, the server picks it up on next load.
+
+**CI/CD gating** — pipelines check the alias before deploying:
+```bash
+mlflow models get-version --alias production iris-classifier
+```
+
+**Reproducibility audits** — "what model was serving on June 18th?" → look up which
+version held `@production` at that time. The registry keeps the full history.
+
+**Compliance / governance** — regulated industries (finance, healthcare) need the chain:
+training data → run → model version → deployment alias. The registry provides it.
+
+**Multi-team handoff** — data scientists promote to `@staging`, MLOps promotes to
+`@production`. The registry is the boundary between them.
+
+In the EKS architecture this lab is part of: the registry sits between Ray Serve
+(training) and ArgoCD (deployment). An alias promotion triggers a GitOps manifest
+update — the signal that a new version is ready to serve.
 
 ---
 
