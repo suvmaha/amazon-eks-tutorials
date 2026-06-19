@@ -169,23 +169,24 @@ Run ID: <uuid>
 ```
 
 **In the UI:**
-- Click **Experiments** → `iris-classification` → open the run
-- You'll see params, metrics, and an artifact (`model/`)
-- Click **Models** in the top nav → you'll see `iris-classifier` Version 1 in **None** stage
+- Left sidebar → **Model Training** → `iris-classifier` → Version 1
+- You'll see params, metrics, and the logged model linked to `iris-classifier v1`
 
 ---
 
-## STEP 8 — Register a model and promote to PRODUCTION
+## STEP 8 — Promote model to production via alias
 
-The Python script already registered the model. Now promote it:
+MLflow 3.x removed Stages (None/Staging/Production/Archived). Promotion is now done
+with **Aliases** — free-form string labels you assign to a version.
 
 **In the UI:**
 
-1. **Models** → `iris-classifier` → Version 1
-2. Click **Stage** → **Transition to** → **Production**
-3. Confirm
+1. Left sidebar → **Model Training** → `iris-classifier` → Version 1
+2. Click **Add alias** → type `production` → Save
 
-The model is now tagged `PRODUCTION`. In the unified architecture, this is the signal that triggers an ArgoCD manifest update to deploy the new version.
+The alias `@production` is now pinned to Version 1. In a real pipeline this alias is
+what downstream services reference — they load `models:/iris-classifier@production`
+and automatically get whatever version the alias points to.
 
 **Verify from CLI:**
 
@@ -194,15 +195,14 @@ python3 - <<'EOF'
 import mlflow
 
 client = mlflow.MlflowClient(tracking_uri="http://localhost:5000")
-versions = client.get_latest_versions("iris-classifier", stages=["Production"])
-for v in versions:
-    print(f"Model: {v.name}  Version: {v.version}  Stage: {v.current_stage}")
+v = client.get_model_version_by_alias("iris-classifier", "production")
+print(f"Model: {v.name}  Version: {v.version}  Alias: production")
 EOF
 ```
 
 Expected:
 ```
-Model: iris-classifier  Version: 1  Stage: Production
+Model: iris-classifier  Version: 1  Alias: production
 ```
 
 ---
