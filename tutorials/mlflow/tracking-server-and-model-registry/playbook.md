@@ -38,23 +38,32 @@ eksctl version             # 0.200+
 kubectl version --client   # v1.3x
 helm version --short       # v3.x
 python3 --version          # 3.9+
-pip3 --version
 
 aws sts get-caller-identity
 ```
 
 ---
 
-## STEP 2 — Clone the repo
+## STEP 2 — Clone the repo and create venv
 
 ```bash
 git clone https://github.com/suvmaha/amazon-eks-tutorials.git
 cd amazon-eks-tutorials
 
 export REPO_ROOT=$(pwd)
-
-tree tutorials/mlflow/
 ```
+
+Create a virtual environment for the Python experiment script:
+
+```bash
+python3 -m venv /tmp/mlflow-venv
+source /tmp/mlflow-venv/bin/activate
+pip install mlflow scikit-learn
+```
+
+> The venv is needed on macOS — system Python is externally managed (PEP 668) and
+> blocks `pip install` system-wide. `/tmp/mlflow-venv` is intentionally ephemeral;
+> it won't survive a reboot, which is fine for a single lab session.
 
 ---
 
@@ -139,11 +148,11 @@ Open: http://localhost:5000
 
 ## STEP 7 — Log an experiment run
 
-Install the Python dependencies and run the experiment script.
-It trains a simple classifier on the Iris dataset and logs everything to MLflow.
+Run the experiment script — trains a simple classifier on the Iris dataset and logs
+everything to MLflow. Ensure the venv from STEP 2 is active first.
 
 ```bash
-pip3 install mlflow scikit-learn
+source /tmp/mlflow-venv/bin/activate
 
 python3 ${REPO_ROOT}/tutorials/mlflow/tracking-server-and-model-registry/scripts/log-experiment.py
 ```
