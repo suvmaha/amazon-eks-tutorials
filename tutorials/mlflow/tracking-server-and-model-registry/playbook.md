@@ -200,6 +200,11 @@ Model: iris-classifier  Version: 1  Stage: Production
 
 ## STEP 9 — Tear Down
 
+**Estimate session cost before teardown:**
+```bash
+${REPO_ROOT}/EKS-Workshop/scripts/session-cost.sh
+```
+
 **Remove MLflow (keeps the cluster running for the next lab):**
 → [uninstall.sh](scripts/uninstall.sh)
 
@@ -221,4 +226,9 @@ Auto Mode:
 ${REPO_ROOT}/EKS-Workshop/cluster/auto-mode/destroy.sh
 ```
 
-Cost check runs automatically at the end of the destroy script.
+**Run cost check to confirm clean teardown:**
+```bash
+${REPO_ROOT}/EKS-Workshop/scripts/cost-check.sh
+```
+
+> The destroy script does not run the cost check automatically — run it manually after teardown.
