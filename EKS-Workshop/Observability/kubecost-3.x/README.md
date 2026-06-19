@@ -1,8 +1,24 @@
 # Kubecost 3.x — Upgrade Assessment
 
-**Status:** Planned — not yet built
+**Status:** Ready to run — scripts and playbook built from 2.x baseline. Verify TODOs on first session.
 **Reference:** https://www.ibm.com/docs/en/kubecost/self-hosted/3.x?topic=installupgrade-kubecost-upgrade
 **Parallel folder:** `../kubecost` (2.8.6 — working baseline)
+
+---
+
+## Playbook
+
+→ [playbook.md](playbook.md)
+
+---
+
+## Scripts
+
+| Script | Purpose |
+|--------|---------|
+| [`addons/kubecost-3.x/install.sh`](../../addons/kubecost-3.x/install.sh) | Helm install (`kubecost/kubecost` chart) + IRSA |
+| [`addons/kubecost-3.x/uninstall.sh`](../../addons/kubecost-3.x/uninstall.sh) | Helm uninstall, IRSA SA, namespace |
+| [`addons/kubecost-3.x/iam-policy.json`](../../addons/kubecost-3.x/iam-policy.json) | IAM policy (same as 2.x) |
 
 ---
 
@@ -28,13 +44,14 @@ we build 3.x clean so both versions remain runnable for comparison.
 invalid or unnecessary:
 
 ```bash
-# 2.x only — remove for 3.x
+# 2.x only — not used in 3.x install.sh
 --set prometheus.server.persistentVolume.enabled=false
 ```
 
 ### IRSA
 
-Needs re-verification — service account names and helm values may differ with the new chart.
+Same pattern as 2.x: helm installs first (creates SA + RBAC), then eksctl annotates
+the existing SA with `--override-existing-serviceaccounts`.
 
 ---
 
@@ -47,7 +64,7 @@ Needs re-verification — service account names and helm values may differ with 
 2.8.x → 2.9 (migration bridge) → 3.0 → 3.x
 ```
 
-For the tutorial (fresh cluster, no existing data), install 3.x directly — no need to
+For this tutorial (fresh cluster, no existing data), install 3.x directly — no need to
 stage through 2.9.
 
 ---
@@ -64,18 +81,17 @@ helm install kubecost kubecost/cost-analyzer --namespace kubecost ...
 helm install kubecost2 kubecost/kubecost --namespace kubecost2 ...
 ```
 
-After validation, scale down 2.x and uninstall. This is a good real-world pattern to
-demonstrate in the tutorial — consider as a bonus step.
+After validation, scale down 2.x and uninstall.
 
 ---
 
-## What to build
+## What to verify on first run
 
-- [ ] `playbook.md` — adapted from `../kubecost/playbook.md`
-- [ ] `scripts/install.sh` — uses `kubecost/kubecost` chart, no Prometheus flags
-- [ ] `scripts/uninstall.sh` — adapted for new chart
-- [ ] `scripts/iam-policy.json` — copy from 2.x, verify permissions still apply
-- [ ] Verify IRSA setup with new chart values
-- [ ] Verify UI navigation (may have changed again in 3.x)
-- [ ] Confirm warm-up time (Prometheus removed — may be faster or different)
-- [ ] Test Savings tab Cloud insights with IRSA
+- [ ] `CHART_VERSION` in `install.sh` — check `helm search repo kubecost/kubecost` for latest 3.x
+- [ ] SA name — confirm `kubecost-cost-analyzer` still applies in 3.x chart
+- [ ] Pod label — `app=cost-analyzer` may differ; update final check in `install.sh`
+- [ ] Service name — confirm `svc/kubecost-cost-analyzer` still correct for port-forward
+- [ ] Warm-up time — document actual time without bundled Prometheus
+- [ ] UI navigation — document what changed vs 2.8.6 layout
+- [ ] Savings tab Cloud insights — confirm IRSA unlocks the same features
+- [ ] Update Run Log in `playbook.md` with results
